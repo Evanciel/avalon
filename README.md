@@ -18,6 +18,7 @@ Pin the pass conditions as numbers before the work starts. Let tools, not the AI
 - [How a run flows](#how-a-run-flows)
 - [Install](#install)
 - [Three ways to run it](#three-ways-to-run-it)
+- [What it looks like in practice](#what-it-looks-like-in-practice)
 - [Tutorial: a real run](#tutorial-a-real-run)
 - [The graph format](#the-graph-format)
 - [Four numbers](#four-numbers)
@@ -154,6 +155,42 @@ Every command takes `--json` for machine-readable output. The runner is mostly a
 | Fail a gate more times than `max_retry` | **Halted** — the run stops and hands the decision to a human |
 
 Every accepted measurement is appended to the ledger. Nothing in it is ever rewritten — even `init --force` discards the state but keeps the ledger.
+
+## What it looks like in practice
+
+<img src="images/where-it-sits.svg" alt="You give the agent a one-line goal, the agent works on the repo, and 'done' can only reach you through Avalon's gates" width="100%" />
+
+Avalon doesn't replace your AI agent — it sits between the agent's "done" and your trust. The agent keeps doing all the work; its claims just have to pass through gates on the way to you.
+
+### In Claude Code
+
+With the skill installed ([Install](#install)), the whole invocation is one line of plain language:
+
+```text
+Run this under avalon — add a search endpoint to my-api, all tests must pass.
+```
+
+Any phrasing works ("avalon으로 진행해", "use the avalon procedure", …) — the skill's trigger is the name. What happens next, with no further prompting:
+
+<img src="images/session-flow.svg" alt="A real session: one line from you, the agent measures and designs, tools give verdicts, a failing gate loops back, approval is requested at the irreversible step, and the final report says completed true, abandoned empty" width="100%" />
+
+1. The agent runs `scaffold`, drafts the graph, and shows you the four numbers before doing anything.
+2. It works node by node, submitting measurements; the tools answer pass or fail.
+3. At the irreversible node it stops and asks you — that pause is compiled into the output, not a courtesy.
+4. The final message carries `completed` and the `abandoned[]` evidence list — the two fields it cannot fake.
+
+Your actual role: read the gate design once at step 1 (the thresholds are yours to argue), answer the approval question, and read four numbers at the end.
+
+### In GPT or any other agent
+
+Nothing in the harness is Claude-specific — the tools are six plain Node CLIs, no API keys, no vendor calls. Point any agent that can run shell commands at the procedure:
+
+```text
+Clone https://github.com/Evanciel/avalon, read SKILL.md, and follow its
+procedure for this task: <your task here>
+```
+
+Every agent gets the same treatment: the validator vetoes its graph drafts, the runner refuses its shortcuts, and the compiled `completed` flag ignores its opinion. And with no AI at all, the runner CLI still works — as a disciplined checklist for humans.
 
 ## Tutorial: a real run
 
@@ -377,6 +414,8 @@ That last habit is the point of the whole directory: the docs record not just wh
 When a gate exhausts its retries with `on_exhaust: partial`, the workflow moves on — but it records `{gate, node, field, op, threshold, measured, attempts}` in an `abandoned[]` list, and the final `completed` flag is **forced to false** while that list is non-empty. A run that skipped a gate can't report itself as a success. Execution-semantics tests pin this down by actually running compiled output.
 
 ## Hooks: a spec is not an installation
+
+<img src="images/stop-hook.svg" alt="When the agent tries to end its turn, hooks-gate runs every check: all green ends the turn, any red blocks it with exit 2 and feeds the failing gates back to the model" width="100%" />
 
 `compile.mjs` emits `build/hooks.json` — per-gate check commands with an exit-code contract — and deliberately stops there. Installation is a separate tool with a separate approval: `install-hooks.mjs` shows its plan and refuses to write anything until a human-confirmed `--yes`, installs to the project's settings only (never global), and can be uninstalled as easily as installed. Auto-install stays forbidden: a tool that silently wires itself into your session's enforcement layer is the exact kind of unaccountable magic this project exists to prevent. Until installed, the spec blocks nothing — and completion reports are required to say so in those words.
 

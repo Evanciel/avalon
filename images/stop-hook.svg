@@ -1,0 +1,40 @@
+<svg viewBox="0 0 1200 280" xmlns="http://www.w3.org/2000/svg" font-family="Consolas, ui-monospace, monospace" role="img" aria-label="When the agent tries to end its turn, hooks-gate runs every check: all green ends the turn, any red blocks it and feeds the failing gates back">
+  <defs>
+    <marker id="s1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#93A0AE"/>
+    </marker>
+    <marker id="s2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#3FAA83"/>
+    </marker>
+    <marker id="s3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#FF7A45"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="280" rx="14" fill="#0D1219"/>
+  <rect x="0.5" y="0.5" width="1199" height="279" rx="14" fill="none" stroke="#26313B"/>
+
+  <!-- agent ends turn -->
+  <rect x="70" y="82" width="250" height="64" rx="8" fill="#131A22" stroke="#93A0AE" stroke-width="1.6"/>
+  <text x="195" y="110" font-size="15" fill="#E3E9F0" text-anchor="middle">agent tries to</text>
+  <text x="195" y="132" font-size="15" fill="#E3E9F0" text-anchor="middle">end its turn</text>
+
+  <path d="M320 114 H 442" stroke="#93A0AE" stroke-width="1.6" marker-end="url(#s1)"/>
+
+  <!-- gate diamond -->
+  <path d="M560 44 L 680 114 L 560 184 L 440 114 Z" fill="#1B242D" stroke="#FF7A45" stroke-width="2"/>
+  <text x="560" y="104" font-size="14" fill="#FF7A45" text-anchor="middle">hooks-gate</text>
+  <text x="560" y="126" font-size="13" fill="#93A0AE" text-anchor="middle">runs every check</text>
+
+  <!-- pass -->
+  <path d="M680 114 H 928" stroke="#3FAA83" stroke-width="1.8" marker-end="url(#s2)"/>
+  <text x="804" y="99" font-size="13" fill="#3FAA83" text-anchor="middle">all exit 0</text>
+  <rect x="934" y="82" width="196" height="64" rx="8" fill="#10261F" stroke="#3FAA83" stroke-width="1.6"/>
+  <text x="1032" y="120" font-size="15" fill="#3FAA83" text-anchor="middle">turn ends &#10003;</text>
+
+  <!-- fail loop -->
+  <path d="M560 184 V 226 H 195 V 148" stroke="#FF7A45" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#s3)"/>
+  <text x="380" y="248" font-size="13" fill="#FF7A45" text-anchor="middle">any failure &#8594; exit 2 &#8212; blocked, failing gates fed back to the model</text>
+
+  <text x="934" y="238" font-size="12" fill="#6B7885">installed by install-hooks.mjs --yes &#183; project settings only &#183; STALE also blocks</text>
+</svg>

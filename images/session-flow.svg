@@ -1,0 +1,48 @@
+<svg viewBox="0 0 1200 620" xmlns="http://www.w3.org/2000/svg" font-family="Consolas, ui-monospace, monospace" role="img" aria-label="A real session: you give one line, the agent measures and designs, tools give verdicts, a failing gate loops, approval is asked at the irreversible step, and the final report says completed true with abandoned empty">
+  <rect width="1200" height="620" rx="14" fill="#0D1219"/>
+  <rect x="0.5" y="0.5" width="1199" height="619" rx="14" fill="none" stroke="#26313B"/>
+
+  <text x="70" y="46" font-size="13" fill="#6B7885" letter-spacing="2">YOU</text>
+  <text x="1130" y="46" font-size="13" fill="#6B7885" letter-spacing="2" text-anchor="end">AGENT</text>
+  <line x1="70" y1="56" x2="1130" y2="56" stroke="#26313B"/>
+
+  <!-- you -->
+  <rect x="70" y="76" width="560" height="40" rx="10" fill="none" stroke="#E3E9F0" stroke-width="1.5"/>
+  <text x="90" y="101" font-size="14" fill="#E3E9F0">Run this under avalon &#8212; add a search API, all tests green.</text>
+
+  <!-- agent -->
+  <rect x="470" y="132" width="660" height="40" rx="10" fill="#131A22" stroke="#26313B"/>
+  <text x="1110" y="157" font-size="14" fill="#93A0AE" text-anchor="end">measured the repo &#183; graph: implement &#8594; test &#8594; ship &#183; G1: tests_failed == 0</text>
+
+  <!-- tool verdict -->
+  <rect x="380" y="188" width="440" height="34" rx="17" fill="none" stroke="#3FAA83"/>
+  <text x="600" y="210" font-size="13.5" fill="#3FAA83" text-anchor="middle">tools: coverage 1.00 &#183; checks 6/6 &#183; loss 0 &#183; 0</text>
+
+  <!-- agent works -->
+  <rect x="560" y="238" width="570" height="40" rx="10" fill="#131A22" stroke="#26313B"/>
+  <text x="1110" y="263" font-size="14" fill="#93A0AE" text-anchor="end">implement done &#183; measuring: tests_failed = 3</text>
+
+  <!-- tool fail -->
+  <rect x="380" y="294" width="360" height="34" rx="17" fill="none" stroke="#FF7A45"/>
+  <text x="560" y="316" font-size="13.5" fill="#FF7A45" text-anchor="middle">tools: G1  3 == 0 &#8594; fail &#183; retry 1/2</text>
+
+  <!-- agent retry -->
+  <rect x="560" y="344" width="570" height="40" rx="10" fill="#131A22" stroke="#26313B"/>
+  <text x="1110" y="369" font-size="14" fill="#93A0AE" text-anchor="end">fixed the code &#183; measuring: tests_failed = 0</text>
+
+  <!-- tool pass -->
+  <rect x="380" y="400" width="300" height="34" rx="17" fill="none" stroke="#3FAA83"/>
+  <text x="530" y="422" font-size="13.5" fill="#3FAA83" text-anchor="middle">tools: G1  0 == 0 &#8594; pass</text>
+
+  <!-- agent asks approval -->
+  <rect x="470" y="450" width="660" height="40" rx="10" fill="#131A22" stroke="#FF7A45" stroke-width="1.5"/>
+  <text x="1110" y="475" font-size="14" fill="#E3E9F0" text-anchor="end">&#9208; ship is irreversible &#8212; I need your approval to continue</text>
+
+  <!-- you approve -->
+  <rect x="70" y="506" width="180" height="40" rx="10" fill="none" stroke="#E3E9F0" stroke-width="1.5"/>
+  <text x="90" y="531" font-size="14" fill="#E3E9F0">approved.</text>
+
+  <!-- final -->
+  <rect x="560" y="562" width="570" height="40" rx="10" fill="#10261F" stroke="#3FAA83" stroke-width="1.6"/>
+  <text x="1110" y="587" font-size="14" fill="#3FAA83" text-anchor="end">done &#8212; completed: true &#183; abandoned: [] &#183; ledger attached</text>
+</svg>

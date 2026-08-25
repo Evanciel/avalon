@@ -1,0 +1,43 @@
+<svg viewBox="0 0 1200 290" xmlns="http://www.w3.org/2000/svg" font-family="Consolas, ui-monospace, monospace" role="img" aria-label="You give the agent a one-line goal, the agent works on the repo, and the word done can only reach you through Avalon's gates">
+  <defs>
+    <marker id="w1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#93A0AE"/>
+    </marker>
+    <marker id="w2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#3FAA83"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="290" rx="14" fill="#0D1219"/>
+  <rect x="0.5" y="0.5" width="1199" height="289" rx="14" fill="none" stroke="#26313B"/>
+
+  <!-- YOU -->
+  <rect x="70" y="62" width="150" height="58" rx="8" fill="none" stroke="#E3E9F0" stroke-width="1.8"/>
+  <text x="145" y="97" font-size="18" fill="#E3E9F0" text-anchor="middle">YOU</text>
+
+  <path d="M220 91 H 452" stroke="#93A0AE" stroke-width="1.6" marker-end="url(#w1)"/>
+  <text x="336" y="76" font-size="13" fill="#93A0AE" text-anchor="middle">goal, one line</text>
+
+  <!-- AGENT -->
+  <rect x="458" y="54" width="280" height="74" rx="8" fill="#131A22" stroke="#93A0AE" stroke-width="1.6"/>
+  <text x="598" y="86" font-size="17" fill="#E3E9F0" text-anchor="middle">AI AGENT</text>
+  <text x="598" y="110" font-size="12" fill="#6B7885" text-anchor="middle">Claude Code &#183; GPT &#183; anything with a shell</text>
+
+  <path d="M738 91 H 972" stroke="#93A0AE" stroke-width="1.6" marker-end="url(#w1)"/>
+  <text x="855" y="76" font-size="13" fill="#93A0AE" text-anchor="middle">does the work</text>
+
+  <!-- REPO -->
+  <rect x="978" y="62" width="150" height="58" rx="8" fill="none" stroke="#93A0AE" stroke-width="1.6"/>
+  <text x="1053" y="97" font-size="17" fill="#E3E9F0" text-anchor="middle">YOUR REPO</text>
+
+  <!-- AVALON bar -->
+  <rect x="438" y="192" width="320" height="56" rx="9" fill="#1B242D" stroke="#FF7A45" stroke-width="2"/>
+  <text x="598" y="216" font-size="16" fill="#FF7A45" text-anchor="middle">AVALON</text>
+  <text x="598" y="237" font-size="12.5" fill="#93A0AE" text-anchor="middle">deterministic gates &#183; numbers only</text>
+
+  <!-- report path: AGENT -> AVALON -> YOU -->
+  <path d="M598 128 V 190" stroke="#93A0AE" stroke-width="1.6" marker-end="url(#w1)"/>
+  <text x="612" y="165" font-size="12.5" fill="#6B7885">"done"</text>
+  <path d="M438 220 H 145 V 122" stroke="#3FAA83" stroke-width="1.8" fill="none" marker-end="url(#w2)"/>
+  <text x="290" y="207" font-size="13" fill="#3FAA83" text-anchor="middle">"done" reaches you only through the gates</text>
+</svg>
