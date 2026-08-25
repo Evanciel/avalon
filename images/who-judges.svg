@@ -1,0 +1,55 @@
+<svg viewBox="0 0 1200 330" xmlns="http://www.w3.org/2000/svg" font-family="Consolas, ui-monospace, monospace" role="img" aria-label="Without Avalon the agent grades itself; with Avalon a deterministic tool judges measurements">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#93A0AE"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#3FAA83"/>
+    </marker>
+    <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#FF7A45"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="330" rx="14" fill="#0D1219"/>
+  <rect x="0.5" y="0.5" width="1199" height="329" rx="14" fill="none" stroke="#26313B"/>
+
+  <!-- LEFT: self-grading -->
+  <text x="70" y="58" font-size="16" fill="#FF7A45" letter-spacing="2">WITHOUT AVALON</text>
+  <rect x="70" y="120" width="170" height="60" rx="7" fill="none" stroke="#93A0AE" stroke-width="1.6"/>
+  <text x="155" y="156" font-size="18" fill="#E3E9F0" text-anchor="middle">agent</text>
+
+  <path d="M240 150 H 330" stroke="#93A0AE" stroke-width="1.6" marker-end="url(#a)"/>
+  <rect x="336" y="120" width="170" height="60" rx="7" fill="#10261F" stroke="#3FAA83" stroke-width="1.6"/>
+  <text x="421" y="156" font-size="18" fill="#3FAA83" text-anchor="middle">&#10003; "done"</text>
+
+  <!-- self-loop: writes its own grade -->
+  <path d="M155 120 C 155 60, 421 60, 421 118" stroke="#FF7A45" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#ao)"/>
+  <text x="288" y="92" font-size="14" fill="#FF7A45" text-anchor="middle">writes its own grade</text>
+
+  <text x="70" y="252" font-size="15" fill="#6B7885">the one doing the work</text>
+  <text x="70" y="274" font-size="15" fill="#6B7885">is the one checking it</text>
+
+  <!-- divider -->
+  <line x1="600" y1="30" x2="600" y2="300" stroke="#26313B"/>
+
+  <!-- RIGHT: tool judges -->
+  <text x="660" y="58" font-size="16" fill="#3FAA83" letter-spacing="2">WITH AVALON</text>
+  <rect x="660" y="120" width="150" height="60" rx="7" fill="none" stroke="#93A0AE" stroke-width="1.6"/>
+  <text x="735" y="156" font-size="18" fill="#E3E9F0" text-anchor="middle">agent</text>
+
+  <path d="M810 150 H 880" stroke="#93A0AE" stroke-width="1.6" marker-end="url(#a)"/>
+  <text x="845" y="136" font-size="13" fill="#93A0AE" text-anchor="middle">measures</text>
+
+  <!-- gate diamond -->
+  <path d="M950 96 L 1010 150 L 950 204 L 890 150 Z" fill="#1B242D" stroke="#FF7A45" stroke-width="2"/>
+  <text x="950" y="144" font-size="14" fill="#FF7A45" text-anchor="middle">tool</text>
+  <text x="950" y="166" font-size="15" font-weight="700" fill="#E3E9F0" text-anchor="middle">&#8805; 1.00</text>
+
+  <path d="M1010 150 H 1075" stroke="#3FAA83" stroke-width="1.8" marker-end="url(#ag)"/>
+  <text x="1095" y="156" font-size="17" fill="#3FAA83">pass</text>
+  <path d="M950 204 V 252 H 735 V 182" stroke="#FF7A45" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#ao)"/>
+  <text x="845" y="274" font-size="14" fill="#FF7A45" text-anchor="middle">fail &#8594; retry (bounded)</text>
+
+  <text x="660" y="303" font-size="15" fill="#6B7885">the agent submits numbers &#183; a deterministic tool gives the verdict</text>
+</svg>

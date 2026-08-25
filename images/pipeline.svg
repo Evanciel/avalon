@@ -1,0 +1,55 @@
+<svg viewBox="0 0 1200 300" xmlns="http://www.w3.org/2000/svg" font-family="Consolas, ui-monospace, monospace" role="img" aria-label="Avalon pipeline: scaffold, design, validate and compile with four numbers, then run">
+  <defs>
+    <marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#93A0AE"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="300" rx="14" fill="#0D1219"/>
+  <rect x="0.5" y="0.5" width="1199" height="299" rx="14" fill="none" stroke="#26313B"/>
+
+  <!-- 1 scaffold -->
+  <rect x="52" y="70" width="220" height="96" rx="8" fill="none" stroke="#93A0AE" stroke-width="1.6"/>
+  <text x="162" y="102" font-size="17" fill="#E3E9F0" text-anchor="middle">1 &#183; scaffold</text>
+  <text x="162" y="128" font-size="13.5" fill="#93A0AE" text-anchor="middle">measure the repo</text>
+  <text x="162" y="148" font-size="13.5" fill="#93A0AE" text-anchor="middle">emit a green skeleton</text>
+  <text x="162" y="192" font-size="12.5" fill="#6B7885" text-anchor="middle">machine &#183; deterministic</text>
+
+  <path d="M272 118 H 322" stroke="#93A0AE" stroke-width="1.6" marker-end="url(#p)"/>
+
+  <!-- 2 design -->
+  <rect x="328" y="70" width="220" height="96" rx="8" fill="none" stroke="#E3E9F0" stroke-width="1.6" stroke-dasharray="6 4"/>
+  <text x="438" y="102" font-size="17" fill="#E3E9F0" text-anchor="middle">2 &#183; design</text>
+  <text x="438" y="128" font-size="13.5" fill="#93A0AE" text-anchor="middle">nodes &#183; edges &#183; gates</text>
+  <text x="438" y="148" font-size="13.5" fill="#93A0AE" text-anchor="middle">numbers only</text>
+  <text x="438" y="192" font-size="12.5" fill="#6B7885" text-anchor="middle">human judgment</text>
+
+  <path d="M548 118 H 598" stroke="#93A0AE" stroke-width="1.6" marker-end="url(#p)"/>
+
+  <!-- 3 validate + compile -->
+  <rect x="604" y="70" width="260" height="96" rx="8" fill="#1B242D" stroke="#FF7A45" stroke-width="2"/>
+  <text x="734" y="102" font-size="17" fill="#E3E9F0" text-anchor="middle">3 &#183; validate + compile</text>
+  <text x="734" y="128" font-size="13.5" fill="#93A0AE" text-anchor="middle">refuses instead of</text>
+  <text x="734" y="148" font-size="13.5" fill="#93A0AE" text-anchor="middle">silently being wrong</text>
+
+  <!-- four number chips -->
+  <g font-size="12.5">
+    <rect x="604" y="196" width="118" height="26" rx="13" fill="none" stroke="#3FAA83"/>
+    <text x="663" y="213" fill="#3FAA83" text-anchor="middle">coverage 1.00</text>
+    <rect x="730" y="196" width="96" height="26" rx="13" fill="none" stroke="#3FAA83"/>
+    <text x="778" y="213" fill="#3FAA83" text-anchor="middle">checks 6/6</text>
+    <rect x="834" y="196" width="106" height="26" rx="13" fill="none" stroke="#3FAA83"/>
+    <text x="887" y="213" fill="#3FAA83" text-anchor="middle">gate_loss 0</text>
+    <rect x="948" y="196" width="108" height="26" rx="13" fill="none" stroke="#3FAA83"/>
+    <text x="1002" y="213" fill="#3FAA83" text-anchor="middle">hook_loss 0</text>
+  </g>
+  <text x="604" y="248" font-size="12.5" fill="#6B7885">all four green, or nothing runs</text>
+
+  <path d="M864 118 H 914" stroke="#93A0AE" stroke-width="1.6" marker-end="url(#p)"/>
+
+  <!-- 4 run -->
+  <rect x="920" y="70" width="220" height="96" rx="8" fill="none" stroke="#3FAA83" stroke-width="1.8"/>
+  <text x="1030" y="102" font-size="17" fill="#3FAA83" text-anchor="middle">4 &#183; run</text>
+  <text x="1030" y="128" font-size="13.5" fill="#93A0AE" text-anchor="middle">order enforced</text>
+  <text x="1030" y="148" font-size="13.5" fill="#93A0AE" text-anchor="middle">append-only ledger</text>
+</svg>

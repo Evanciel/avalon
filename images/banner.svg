@@ -1,0 +1,47 @@
+<svg viewBox="0 0 1200 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Avalon — declare the graph, let the numbers judge">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#93A0AE"/>
+    </marker>
+    <marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#3FAA83"/>
+    </marker>
+    <marker id="aho" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#FF7A45"/>
+    </marker>
+  </defs>
+
+  <!-- ground -->
+  <rect x="0" y="0" width="1200" height="280" rx="14" fill="#0D1219"/>
+  <rect x="0.5" y="0.5" width="1199" height="279" rx="14" fill="none" stroke="#26313B"/>
+
+  <!-- wordmark -->
+  <text x="64" y="122" font-family="Segoe UI, -apple-system, sans-serif" font-size="64" font-weight="800" letter-spacing="2" fill="#E3E9F0">AVALON</text>
+  <rect x="66" y="140" width="330" height="3" fill="#FF7A45"/>
+  <text x="64" y="178" font-family="Segoe UI, -apple-system, sans-serif" font-size="21" fill="#93A0AE">Declare the graph. Let the numbers judge.</text>
+  <text x="64" y="212" font-family="Consolas, ui-monospace, monospace" font-size="15" fill="#6B7885">ir_field_coverage 1.00 · static_checks 6/6 · gate_loss 0 · hook_loss 0</text>
+
+  <!-- mini graph: work → gate → pass / fail loop -->
+  <g font-family="Consolas, ui-monospace, monospace">
+    <!-- work node -->
+    <rect x="640" y="106" width="118" height="52" rx="6" fill="none" stroke="#93A0AE" stroke-width="1.6"/>
+    <text x="699" y="138" font-size="17" fill="#E3E9F0" text-anchor="middle">work</text>
+
+    <!-- edge to gate -->
+    <path d="M758 132 H 818" stroke="#93A0AE" stroke-width="1.6" fill="none" marker-end="url(#ah)"/>
+
+    <!-- gate diamond -->
+    <path d="M878 84 L 938 132 L 878 180 L 818 132 Z" fill="#1B242D" stroke="#FF7A45" stroke-width="2"/>
+    <text x="878" y="128" font-size="15" fill="#FF7A45" text-anchor="middle">gate</text>
+    <text x="878" y="150" font-size="15" font-weight="700" fill="#E3E9F0" text-anchor="middle">&#8805; 1.00</text>
+
+    <!-- pass path -->
+    <path d="M938 132 H 1006" stroke="#3FAA83" stroke-width="1.8" fill="none" marker-end="url(#ahg)"/>
+    <rect x="1010" y="106" width="118" height="52" rx="6" fill="none" stroke="#3FAA83" stroke-width="1.8"/>
+    <text x="1069" y="138" font-size="17" fill="#3FAA83" text-anchor="middle">pass</text>
+
+    <!-- fail loop back -->
+    <path d="M878 180 V 222 H 699 V 162" stroke="#FF7A45" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#aho)"/>
+    <text x="788" y="243" font-size="14" fill="#FF7A45" text-anchor="middle">fail &#183; retry &#8804; max</text>
+  </g>
+</svg>
