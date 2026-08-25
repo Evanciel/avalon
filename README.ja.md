@@ -5,7 +5,7 @@
 **AIエージェントのためのグラフエンジニアリング — 完全なハーネスと、自分を騙せないループ。**<br/>
 作業を始める前に合格条件を数字で固定し、判定はAIではなくツールが下します。
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-136%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-139%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · [한국어](README.ko.md) · **日本語** · [简体中文](README.zh.md)
 
@@ -94,7 +94,7 @@ Avalonは4つのステージとして設計されており、このリポジト�
 
 ```bash
 git clone https://github.com/Evanciel/avalon && cd avalon
-npm test        # テスト136件、依存関係0、Node 18+
+npm test        # テスト139件、依存関係0、Node 18+
 ```
 
 **Claude Codeのスキル**として使うには、スキルディレクトリにクローンするだけです — [SKILL.md](SKILL.md)のfrontmatter(`name: avalon`)が登録を担います:
@@ -412,6 +412,8 @@ IRからワークフロースクリプトへの純関数です。内部では非
 
 インストーラは `build/hooks.json` を**プロジェクトの** `.claude/settings.json` にStopフックとして配線します。要点はその境界です: `--yes` なしには何も書かない(計画だけ見せてexit 3 — エージェントがユーザーの了承なしに `--yes` を付けるのは禁止)、グローバルの `~/.claude` settingsは `--yes` があっても拒否、ハッシュが現在のグラフと合わない古い仕様は拒否、他人のフック項目は保存、再インストールは冪等。`--uninstall --yes` でいつでも外せます。
 
+さらに**承認したものそれ自体を刻印します**: 承認時点の `build/hooks.json` のバイトハッシュが、インストールされる命令にそのまま埋め込まれます(`--approved sha256:…`)。以後ファイルがどんな形で変わっても、ゲートは**checkを1つも実行する前に** TAMPERED としてブロックします — これがなければ、JSONファイル1つへの書き込み権限が、毎ターン終了時に任意の命令を自動実行させる権限と等しくなってしまいます。戻る道は再承認(`--yes` 再インストール)だけです。
+
 インストール後は、セッションがターンを終えようとするたびに `hooks-gate.mjs` が宣言済みcheckを全部回します: 全部通過 → exit 0、1つでも未達 → exit 2で終了をブロックし、未達ゲートをモデルに返します。グラフが変わればSTALEを報告してブロック — 昨日のルールを黙って強制するより、止まるほうが正直です。
 
 ## ルールが生まれた場所
@@ -458,11 +460,11 @@ IRからワークフロースクリプトへの純関数です。内部では非
 
 ## どうテストしているか
 
-`npm test` 1つで回る3つのスイート、合計136件:
+`npm test` 1つで回る3つのスイート、合計139件:
 
 - **[test.mjs](tools/test.mjs) (88件)** — スキーマとコンパイラの挙動、そして**実行意味論**: コンパイルされたワークフロー出力をスタブホストで実際に実行します。「abandonedが空でなければcompletedはfalse」のような主張が、断言ではなく実演されます。デプロイ同期ゲートはランタイムファイル8個をインストール済みスキルのコピーとバイト照合し、リポジトリと配備物が静かにずれるのを防ぎます。
 - **[run.selftest.mjs](tools/run.selftest.mjs) (36件)** — ランナーの拒否の壁を、壁の存在を証明する唯一の方法でテストします: *ガードを消せばスイートが赤くならなければならない。* 各テストは禁止された状況(フロンティア外のstart、測定なしのdone、グラフを直して続行、台帳の改竄)を構成し、ランナーが拒否したときだけ通ります。
-- **[install.selftest.mjs](tools/install.selftest.mjs) (12件)** — インストーラの境界を同じ方法で: `--yes` なしの書き込み禁止、グローバル拒否、古い仕様の拒否、他人のフック保存、冪等な再インストール、そしてゲートの未達・STALEブロック(exit 2)。
+- **[install.selftest.mjs](tools/install.selftest.mjs) (15件)** — インストーラの境界を同じ方法で: `--yes` なしの書き込み禁止、グローバル拒否、古い仕様の拒否、他人のフック保存、冪等な再インストール、そしてゲートの未達・STALEブロック(exit 2)。15件のうち3件は攻撃シナリオです: 承認の*後で* `build/hooks.json` を書き換え — checkを悪意ある命令に差し替え、グラフごと整合的に再生成までして — ゲートが**何も実行せずに**ブロックしたときだけ通ります(仕込んだ命令が走らなかったことをマーカーファイルで証明)。
 
 CIはubuntuとwindowsで両スイートを回します。改行は [.gitattributes](.gitattributes) でLFに固定しています — G0bはバイト単位のオラクルなので、CRLFのチェックアウトは厳密には別の文書だからです。
 
@@ -482,7 +484,7 @@ tools/
   hooks-gate.mjs         Stopフック実行者 — 赤いゲートはターン終了をブロック
   test.mjs               スキーマ・コンパイラ・実行意味論テスト (88件)
   run.selftest.mjs       ランナー自己試験 — 「ガードを消したら赤くなるか」(36件)
-  install.selftest.mjs   インストーラ・ゲート自己試験 — 承認・範囲・STALEの壁 (12件)
+  install.selftest.mjs   インストーラ・ゲート自己試験 — 承認・範囲・改竄の壁 (15件)
 docs/graph/              設計史、IR仕様、上の傷跡の原本
 images/                  このREADMEの図
 ```

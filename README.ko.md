@@ -5,7 +5,7 @@
 **AI 에이전트를 위한 그래프 엔지니어링 — 완전한 하네스, 그리고 스스로를 속이지 못하는 루프.**<br/>
 일을 시작하기 전에 통과 조건을 숫자로 못 박고, 판정은 AI가 아니라 도구가 내립니다.
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-136%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-139%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · **한국어** · [日本語](README.ja.md) · [简体中文](README.zh.md)
 
@@ -94,7 +94,7 @@ Avalon은 순서를 뒤집습니다. 일을 시작하기 **전에** 계획을 �
 
 ```bash
 git clone https://github.com/Evanciel/avalon && cd avalon
-npm test        # 테스트 136건, 의존성 0개, Node 18+
+npm test        # 테스트 139건, 의존성 0개, Node 18+
 ```
 
 **Claude Code 스킬**로 쓰려면 스킬 디렉터리에 클론하면 됩니다 — [SKILL.md](SKILL.md)의 frontmatter(`name: avalon`)가 등록을 담당합니다:
@@ -414,6 +414,8 @@ IR에서 워크플로 스크립트로 가는 순수 함수입니다. 내부에�
 
 설치자는 `build/hooks.json`을 **프로젝트의** `.claude/settings.json`에 Stop 훅으로 심습니다. 핵심은 설치자가 지키는 경계입니다: `--yes` 없이는 아무것도 쓰지 않고(계획만 보여주고 exit 3 — 에이전트가 사용자 승인 없이 `--yes`를 붙이는 건 금지), 전역 `~/.claude` settings는 `--yes`여도 거부하고, 해시가 현재 그래프와 안 맞는 낡은 명세를 거부하고, 남의 훅 항목은 보존하고, 재설치는 멱등입니다. `--uninstall --yes`로 언제든 뺄 수 있습니다.
 
+그리고 **승인받은 것 자체를 박제합니다**: 승인 시점 `build/hooks.json`의 바이트 해시가 설치되는 명령에 그대로 박힙니다(`--approved sha256:…`). 이후 파일이 어떤 식으로든 바뀌면 게이트는 **check 하나 실행하기 전에** TAMPERED 로 차단합니다 — 이게 없으면 JSON 파일 하나에 대한 쓰기 권한이 곧 매 턴 끝마다 임의 명령을 자동 실행시킬 권한이 됩니다. 되돌리는 길은 재승인(`--yes` 재설치)뿐입니다.
+
 설치되면 `hooks-gate.mjs`가 세션이 턴을 끝내려 할 때마다 선언된 check를 전부 돌립니다: 전부 통과 → exit 0, 하나라도 미달 → exit 2로 종료를 차단하고 미달 게이트를 모델에게 되먹입니다. 그래프가 바뀌면 STALE을 보고하고 차단합니다 — 어제의 규칙을 조용히 강제하는 것보다는 멈추는 게 낫습니다.
 
 ## 규칙이 태어난 곳
@@ -460,11 +462,11 @@ IR에서 워크플로 스크립트로 가는 순수 함수입니다. 내부에�
 
 ## 어떻게 테스트하나
 
-`npm test` 하나로 도는 세 스위트, 합계 136건:
+`npm test` 하나로 도는 세 스위트, 합계 139건:
 
 - **[test.mjs](tools/test.mjs) (88건)** — 스키마와 컴파일러 동작, 그리고 **실행 의미론**: 컴파일된 워크플로 산출물을 스텁 호스트에서 실제로 실행합니다. "abandoned가 비어 있지 않으면 completed는 false" 같은 주장이 단언이 아니라 시연됩니다. 배포 동기화 게이트는 런타임 파일 8개를 설치된 스킬 사본과 바이트 대조해서, 저장소와 배포본이 조용히 어긋나는 걸 막습니다.
 - **[run.selftest.mjs](tools/run.selftest.mjs) (36건)** — 러너의 거부 방어벽을, 방어벽의 존재를 증명하는 유일한 방법으로 테스트합니다: *가드를 지우면 스위트가 빨개져야 한다.* 각 테스트는 금지된 상황(프론티어 밖 start, 측정 없는 done, 그래프 고치고 계속, 원장 조작)을 구성하고, 러너가 거부해야만 통과합니다.
-- **[install.selftest.mjs](tools/install.selftest.mjs) (12건)** — 설치자의 경계를 같은 방법으로: `--yes` 없이 쓰기 금지, 전역 거부, 낡은 명세 거부, 남의 훅 보존, 멱등 재설치, 그리고 게이트의 미달·STALE 차단(exit 2).
+- **[install.selftest.mjs](tools/install.selftest.mjs) (15건)** — 설치자의 경계를 같은 방법으로: `--yes` 없이 쓰기 금지, 전역 거부, 낡은 명세 거부, 남의 훅 보존, 멱등 재설치, 그리고 게이트의 미달·STALE 차단(exit 2). 15건 중 3건은 공격 시나리오다: 승인 *뒤에* `build/hooks.json` 을 바꿔치기한다 — check 를 악성 명령으로 교체하고, 그래프째 말이 되게 재생성까지 해본다 — 게이트가 **아무것도 실행하지 않고** 차단해야만 통과한다(심어둔 명령이 안 돌았음을 마커 파일로 증명).
 
 CI는 ubuntu와 windows에서 두 스위트를 다 돌립니다. 줄바꿈은 [.gitattributes](.gitattributes)로 LF에 고정했습니다 — G0b가 바이트 단위 오라클이라, CRLF 체크아웃은 엄밀히 다른 문서이기 때문입니다.
 
@@ -484,7 +486,7 @@ tools/
   hooks-gate.mjs         Stop 훅 집행자 — 빨간 게이트는 턴 종료를 차단
   test.mjs               스키마·컴파일러·실행 의미론 테스트 (88건)
   run.selftest.mjs       러너 자기시험 — "가드를 지우면 빨개지는가" (36건)
-  install.selftest.mjs   설치자·게이트 자기시험 — 승인·범위·STALE 방어벽 (12건)
+  install.selftest.mjs   설치자·게이트 자기시험 — 승인·범위·변조 방어벽 (15건)
 docs/graph/              설계 이력, IR 명세, 위 흉터 기록의 원본
 images/                  이 README의 다이어그램들
 ```

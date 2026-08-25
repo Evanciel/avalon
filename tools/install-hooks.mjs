@@ -24,7 +24,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, resolve, join, relative } from 'node:path'
 import { homedir } from 'node:os'
-import { specHash, isMain } from './hash.mjs'
+import { specHash, sha256, isMain } from './hash.mjs'
 import { hookLoss } from './compile.mjs'
 
 const MARK = 'hooks-gate.mjs'   // 자기 항목 식별자 — 이 문자열이 든 command 만 우리 것으로 본다
@@ -53,12 +53,16 @@ export function plan(graphPath, hooksPath, { settingsPath } = {}) {
   if (loss.length) throw new Error(`hook_loss ${loss.length} — 설치 거부:\n  ` + loss.join('\n  '))
   if (!spec.hooks?.length) throw new Error('설치할 훅이 없다 — hooks.json 의 hooks 가 비어 있다')
 
-  // Stop 훅 명령 — settings 는 프로젝트 루트에서 실행되므로 상대 경로로 적는다
+  // Stop 훅 명령 — settings 는 프로젝트 루트에서 실행되므로 상대 경로로 적는다.
+  // 🔒 승인 박제: <지금 승인받는 hooks.json 바이트>의 해시를 명령에 박는다.
+  //    이후 파일이 어떻게 바뀌든(check 바꿔치기·그래프째 재생성) 게이트는
+  //    실행 없이 차단한다 — 재승인(--yes 재설치) 없이는 새 명령이 돌 수 없다.
   const rg = relative(projDir, resolve(graphPath)).replace(/\\/g, '/') || 'graph.json'
   const rh = relative(projDir, resolve(hooksPath)).replace(/\\/g, '/')
-  const command = `node tools/hooks-gate.mjs ${rg} ${rh}`
+  const approvedHash = sha256(hooksRaw)   // 'sha256:<64hex>' 형식으로 반환된다
+  const command = `node tools/hooks-gate.mjs ${rg} ${rh} --approved ${approvedHash}`
 
-  return { settings, command, gates: spec.hooks.map((h) => h.gate), projDir }
+  return { settings, command, gates: spec.hooks.map((h) => h.gate), projDir, approvedHash }
 }
 
 export function install(graphPath, hooksPath, { settingsPath, uninstall = false } = {}) {

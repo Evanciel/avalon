@@ -5,7 +5,7 @@
 **面向 AI 智能体的图工程 — 一套完整的执行框架，和骗不了自己的循环。**<br/>
 在开工之前就把通过条件钉成数字，裁决交给工具，而不是 AI 自己。
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-136%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-139%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · **简体中文**
 
@@ -94,7 +94,7 @@ Avalon 的架构是四个阶段,这个仓库里的工具就是它们的实现:
 
 ```bash
 git clone https://github.com/Evanciel/avalon && cd avalon
-npm test        # 136 个测试,零依赖,Node 18+
+npm test        # 139 个测试,零依赖,Node 18+
 ```
 
 要作为 **Claude Code 技能**使用,克隆到技能目录即可 — [SKILL.md](SKILL.md) 的 frontmatter(`name: avalon`)负责注册:
@@ -412,6 +412,8 @@ $ node tools/install-hooks.mjs graph.json build/hooks.json
 
 安装器把 `build/hooks.json` 作为 Stop 钩子接进**项目的** `.claude/settings.json`。重点在它守住的边界:没有 `--yes` 就什么都不写(只打印计划并 exit 3 — 智能体不得在未经用户许可时自行加 `--yes`);全局 `~/.claude` settings 即使加了 `--yes` 也拒绝;哈希对不上当前图的过期规格拒绝;别人的钩子条目原样保留;重复安装幂等。`--uninstall --yes` 随时卸载。
 
+它还会**把获批的内容本身钉死**:审批时刻 `build/hooks.json` 的字节哈希被原样嵌进安装的命令里(`--approved sha256:…`)。此后文件以任何方式变动,门都会在**执行任何一条 check 之前**以 TAMPERED 拦下 — 没有这一层,对一个 JSON 文件的写权限就等于让任意命令在每一轮结束时自动执行的权限。唯一的回路是重新审批(`--yes` 重装)。
+
 装好之后,每当会话要结束回合,`hooks-gate.mjs` 就跑一遍所有已声明的 check:全过 → exit 0;有一个不过 → exit 2 拦截结束,并把不合格的门反馈给模型。图变了就报 STALE 并拦截 — 悄悄执行昨天的规则,比停下来更不诚实。
 
 ## 规则从哪里来
@@ -458,11 +460,11 @@ $ node tools/install-hooks.mjs graph.json build/hooks.json
 
 ## 怎么测试的
 
-`npm test` 一条命令跑三个套件,共 136 个:
+`npm test` 一条命令跑三个套件,共 139 个:
 
 - **[test.mjs](tools/test.mjs)(88 个)** — 模式和编译器行为,包括**执行语义**:编译出的工作流产物在打桩的宿主上被真正执行,所以"abandoned 非空时 completed 为 false"这类主张是演示出来的,不是断言出来的。部署同步门把 8 个运行时文件与已安装的技能副本逐字节比对,仓库和部署版无法悄悄漂移。
 - **[run.selftest.mjs](tools/run.selftest.mjs)(36 个)** — 用唯一能证明护栏存在的方法测试运行器的拒绝墙:*删掉护栏,套件必须变红。* 每个测试构造一种被禁止的局面(跳前沿集的 start、没测量的 done、改图继续跑、篡改台账),只有运行器拒绝了才算通过。
-- **[install.selftest.mjs](tools/install.selftest.mjs)(12 个)** — 用同样的方法测安装器的边界:无 `--yes` 不写、拒绝全局、拒绝过期规格、保留他人钩子、幂等重装,以及门在不合格与 STALE 时的拦截(exit 2)。
+- **[install.selftest.mjs](tools/install.selftest.mjs)(15 个)** — 用同样的方法测安装器的边界:无 `--yes` 不写、拒绝全局、拒绝过期规格、保留他人钩子、幂等重装,以及门在不合格与 STALE 时的拦截(exit 2)。15 个里有 3 个是攻击场景:在审批*之后*篡改 `build/hooks.json` — 把 check 换成恶意命令,甚至连图带规格一致地重新生成 — 只有门**什么都不执行**就拦下时才算通过(用标记文件证明植入的命令从未运行)。
 
 CI 在 ubuntu 和 windows 上跑全部两个套件。换行符通过 [.gitattributes](.gitattributes) 钉死为 LF — 因为 G0b 是逐字节的判据,CRLF 检出严格来说就是另一份文档。
 
@@ -482,7 +484,7 @@ tools/
   hooks-gate.mjs         Stop 钩子执行者 — 红灯的门拦截回合结束
   test.mjs               模式 / 编译器 / 执行语义测试(88 个)
   run.selftest.mjs       运行器自检 — "删掉护栏会变红吗"(36 个)
-  install.selftest.mjs   安装器/门自检 — 审批·范围·STALE 之墙(12 个)
+  install.selftest.mjs   安装器/门自检 — 审批·范围·防篡改之墙(15 个)
 docs/graph/              设计史、IR 规格、上述伤疤的原始记录
 images/                  本 README 的示意图
 ```

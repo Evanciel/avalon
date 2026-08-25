@@ -174,6 +174,55 @@ t('망가진 settings 를 덮어쓰지 않는다', () => {
   eq(readFileSync(f.settings, 'utf8'), '{ not json !!!', '원본이 그대로여야 한다')
 })
 
+console.log('\n── 승인 박제 — TOCTOU 방어 ──')
+
+t('★ 설치된 명령에 승인 시점 해시가 박혀 있다 (--approved)', () => {
+  const f = mk('pin-embed', PASS_CMD)
+  run('install-hooks.mjs', [f.graphPath, f.hooksPath, '--yes'])
+  const s = JSON.parse(readFileSync(f.settings, 'utf8'))
+  const cmd = s.hooks.Stop.find((e) => e.hooks[0].command.includes('hooks-gate.mjs')).hooks[0].command
+  ok(/--approved sha256:[0-9a-f]{64}/.test(cmd), '승인 해시가 명령에 없다')
+})
+
+t('★★ 설치 후 check 를 바꿔치기하면 — 차단되고, 바꿔친 명령은 <실행되지 않는다>', () => {
+  const f = mk('pin-tamper', PASS_CMD)
+  run('install-hooks.mjs', [f.graphPath, f.hooksPath, '--yes'])
+  const s = JSON.parse(readFileSync(f.settings, 'utf8'))
+  const cmd = s.hooks.Stop.find((e) => e.hooks[0].command.includes('hooks-gate.mjs')).hooks[0].command
+  // 공격: 파일 쓰기 권한만으로 check 를 악성 명령으로 교체 (마커 파일 생성 = 실행 증거)
+  const marker = join(f.dir, 'PWNED')
+  const spec = JSON.parse(readFileSync(f.hooksPath, 'utf8'))
+  spec.hooks[0].check = `node -e "require('fs').writeFileSync(${JSON.stringify(marker)},'x')"`
+  writeFileSync(f.hooksPath, JSON.stringify(spec, null, 2))
+  // 설치된 명령 그대로 실행
+  const parts = cmd.split(' ').slice(1)
+  parts[0] = join(TOOLS, 'hooks-gate.mjs')
+  let exit = 0, out = ''
+  try { execFileSync(process.execPath, parts, { cwd: f.dir, stdio: 'pipe' }) }
+  catch (e) { exit = e.status; out = String(e.stdout ?? '') + String(e.stderr ?? '') }
+  eq(exit, 2, '차단(exit 2)이어야 한다')
+  ok(out.includes('TAMPERED'), 'TAMPERED 라고 말해야 한다')
+  ok(!existsSync(marker), '★핵심: 바꿔친 명령이 실행되면 안 된다 — 마커 파일이 존재한다')
+})
+
+t('★ 그래프째로 말이 되게 재생성해도 — 승인 해시가 다르므로 차단된다', () => {
+  const f = mk('pin-regen', PASS_CMD)
+  run('install-hooks.mjs', [f.graphPath, f.hooksPath, '--yes'])
+  const s = JSON.parse(readFileSync(f.settings, 'utf8'))
+  const cmd = s.hooks.Stop.find((e) => e.hooks[0].command.includes('hooks-gate.mjs')).hooks[0].command
+  // 공격: 그래프의 check 를 바꾸고 재스탬프 + hooks.json 재컴파일 — 서로는 완전히 일관됨
+  const marker = join(f.dir, 'PWNED2')
+  const g2 = miniGraph(`node -e "require('fs').writeFileSync(${JSON.stringify(marker)},'x')"`)
+  writeFileSync(f.graphPath, JSON.stringify(g2, null, 2))
+  writeFileSync(f.hooksPath, compileHooks(g2))
+  const parts = cmd.split(' ').slice(1)
+  parts[0] = join(TOOLS, 'hooks-gate.mjs')
+  let exit = 0
+  try { execFileSync(process.execPath, parts, { cwd: f.dir, stdio: 'pipe' }) } catch (e) { exit = e.status }
+  eq(exit, 2, '일관된 재생성도 재승인 전에는 차단이어야 한다')
+  ok(!existsSync(marker), '재생성된 check 도 실행되면 안 된다')
+})
+
 console.log('\n── 설치 → 집행 왕복 ──')
 
 t('설치된 명령을 그대로 실행하면 게이트가 실제로 돈다', () => {

@@ -104,10 +104,11 @@ node tools/install-hooks.mjs graph.json build/hooks.json          # 계획만 �
 node tools/install-hooks.mjs graph.json build/hooks.json --yes    # 사용자 승인 후에만
 ```
 
-설치자가 지키는 경계 (install.selftest.mjs 12건이 고정):
+설치자가 지키는 경계 (install.selftest.mjs 15건이 고정):
 - `--yes` 없이는 아무것도 쓰지 않는다. **에이전트가 사용자 승인 없이 --yes 를 붙이는 것은 금지다.**
 - 프로젝트 `.claude/settings.json` 에만 쓴다 — 전역(`~/.claude`)은 `--yes` 여도 거부.
 - 낡은 명세(spec_hash 불일치)는 거부. 남의 훅 항목은 보존. 재설치는 멱등. `--uninstall` 제공.
+- 승인 시점 명세의 바이트 해시를 설치 명령에 박제(--approved) — 이후 hooks.json 이 어떻게 바뀌든 게이트는 <실행 없이> 차단한다. 재승인 전에는 새 check 가 돌 수 없다.
 
 설치되면 `hooks-gate.mjs` 가 Stop 훅으로 돌며, 게이트 미달 시 exit 2 로 세션 종료를 차단한다.
 그래프가 바뀌면 게이트는 STALE 을 **통과가 아니라 차단**으로 처리한다 — 재컴파일 → 재설치가 해소 경로다.

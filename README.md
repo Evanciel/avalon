@@ -5,7 +5,7 @@
 **Graph engineering for AI agents — a complete harness, and loops that can't fool themselves.**<br/>
 Pin the pass conditions as numbers before the work starts. Let tools, not the AI, do the judging.
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-136%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-139%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 **English** · [한국어](README.ko.md) · [日本語](README.ja.md) · [简体中文](README.zh.md)
 
@@ -94,7 +94,7 @@ Two of the four steps are machines, one is you, and one is a machine watching yo
 
 ```bash
 git clone https://github.com/Evanciel/avalon && cd avalon
-npm test        # 136 tests, zero dependencies, Node 18+
+npm test        # 139 tests, zero dependencies, Node 18+
 ```
 
 To use it as a **Claude Code skill**, clone it into your skills directory — [SKILL.md](SKILL.md) has the frontmatter (`name: avalon`) that registers it:
@@ -412,6 +412,8 @@ Frontier discipline, measurement ledger, gate verdicts, STALE detection, halt-to
 
 The installer takes `build/hooks.json` and wires it into the **project's** `.claude/settings.json` as a Stop hook. Its boundaries are the point: it writes nothing without `--yes` (prints the plan and exits 3 — an agent must not pass `--yes` without the user's say-so), it refuses the global `~/.claude` settings even with `--yes`, it refuses a spec whose hash doesn't match the current graph, it preserves everyone else's hooks, and reinstalling is idempotent. `--uninstall --yes` takes it back out.
 
+It also pins what was approved: the byte hash of `build/hooks.json` at approval time is embedded in the installed command (`--approved sha256:…`). If the file changes in any way afterwards, the gate blocks **before running a single check** and reports TAMPERED — without this, write access to one JSON file would equal the right to have arbitrary commands executed automatically at the end of every turn. Re-approval (`--yes` reinstall) is the only path back.
+
 Once installed, `hooks-gate.mjs` runs every declared check when the session tries to end its turn: all pass → exit 0; any fail → exit 2, which blocks the stop and feeds the failing gates back to the model. A changed graph makes it report STALE and block — enforcing yesterday's rules silently would be worse than stopping.
 
 ## Where the rules came from
@@ -458,11 +460,11 @@ The graph's `guarantees` block is the honest-limits list in machine-adjacent for
 
 ## How it's tested
 
-136 tests in three suites, all run by `npm test`:
+139 tests in three suites, all run by `npm test`:
 
 - **[test.mjs](tools/test.mjs) (88)** — schema and compiler behavior, including **execution semantics**: compiled workflow output is actually executed against stubbed hosts, so claims like "completed is false while abandoned is non-empty" are demonstrated, not asserted. A deploy-sync gate byte-compares the eight runtime files against the installed skill copy, so the repo and the deployed skill can't drift apart silently.
 - **[run.selftest.mjs](tools/run.selftest.mjs) (36)** — the runner's refusal walls, tested by the only method that proves a guard exists: *remove the guard, and the suite must turn red*. Each test constructs the forbidden situation (out-of-frontier start, unmeasured done, edited-graph continue, ledger tampering) and passes only if the runner refuses.
-- **[install.selftest.mjs](tools/install.selftest.mjs) (12)** — the installer's boundaries, same method: no write without `--yes`, global settings refused, stale spec refused, other people's hooks preserved, idempotent reinstall, and the gate blocking (exit 2) on failure and on STALE.
+- **[install.selftest.mjs](tools/install.selftest.mjs) (15)** — the installer's boundaries, same method: no write without `--yes`, global settings refused, stale spec refused, other people's hooks preserved, idempotent reinstall, and the gate blocking (exit 2) on failure and on STALE. Three of the fifteen are attack scenarios: they modify `build/hooks.json` *after* approval — swapping a check for a malicious command, even regenerating graph and spec consistently — and pass only if the gate blocks **without executing anything** (a marker file proves the planted command never ran).
 
 CI runs both suites on ubuntu and windows. Line endings are pinned to LF via [.gitattributes](.gitattributes) because G0b is a byte-exact oracle — a CRLF checkout would technically be a different document.
 
@@ -482,7 +484,7 @@ tools/
   hooks-gate.mjs         Stop-hook enforcer — red gate blocks ending the turn
   test.mjs               schema / compiler / execution-semantics tests (88)
   run.selftest.mjs       runner self-test — "does removing a guard turn it red?" (36)
-  install.selftest.mjs   installer/gate self-test — approval, scope, STALE walls (12)
+  install.selftest.mjs   installer/gate self-test — approval, scope, tamper walls (15)
 docs/graph/              design history, IR spec, the scar records above
 images/                  the diagrams in this README
 ```
