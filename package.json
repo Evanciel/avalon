@@ -2,7 +2,7 @@
   "name": "avalon-skill",
   "version": "1.4.0",
   "private": true,
-  "description": "작업을 그래프로 선언하고, 숫자 게이트로 판정하고, 무손실 컴파일로 실행한다 — LLM-free 도구 체인",
+  "description": "Declare work as a graph, judge it with numeric gates, execute via lossless compile — an LLM-free toolchain for agent harnesses",
   "type": "module",
   "scripts": {
     "test": "node tools/test.mjs && node tools/run.selftest.mjs && node tools/install.selftest.mjs"
