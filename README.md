@@ -12,6 +12,7 @@ Pin the pass conditions as numbers before the work starts. Let tools, not the AI
 </div>
 
 - [The problem](#the-problem)
+- [Who this is for](#who-this-is-for)
 - [What's in the harness](#whats-in-the-harness)
 - [The four stages](#the-four-stages)
 - [How a run flows](#how-a-run-flows)
@@ -40,6 +41,22 @@ Avalon flips the order. **Before** the work starts, you draw the plan as a graph
 <img src="images/who-judges.svg" alt="Without Avalon the agent writes its own grade. With Avalon the agent submits measurements and a deterministic tool gives the verdict." width="100%" />
 
 The agent still does all the work — it just loses the right to grade itself.
+
+## Who this is for
+
+- **You hand agents big work.** Four-plus files, several modules, steps that are hard to undo. The bigger the task, the bigger the gap a "done" can hide.
+- **You run agents unattended.** Overnight loops, retry-until-green. Without a judge outside the agent, the loop fools itself until morning.
+- **You've been burned by "done".** Once is enough. For everyone who stopped trusting success reports without evidence.
+
+Not for one-or-two-file edits — if drawing the plan costs more than the work, that's the tail wagging the dog.
+
+**What you get:**
+
+| Promise | How it's kept |
+|---|---|
+| False success is impossible | A run that skipped a gate has no way to report itself as a success — and tests prove it by executing the compiled output |
+| Giving up leaves evidence | Attempts and measured values are recorded; "close enough" is not a thing |
+| Verdicts don't drift | The judging tools never call an LLM. Same graph, same verdict — no mood, no persuasion |
 
 ## What's in the harness
 
