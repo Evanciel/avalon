@@ -97,8 +97,21 @@ node tools/run.mjs graph.json done <node>   # 게이트 판정은 도구만 내�
 ## 훅 — 산출과 설치는 다른 단계다
 
 컴파일은 `build/hooks.json` **명세까지만** 낸다 (게이트별 check 명령 + exit 계약).
-settings 설치는 별도 승인 노드의 일이며, 자동 설치는 금지다. 명세는 설치되기 전까지
-아무것도 차단하지 않는다 — 이 한계를 완료 보고에 그대로 쓴다.
+설치는 별도 도구가, 별도 승인 아래 한다:
+
+```bash
+node tools/install-hooks.mjs graph.json build/hooks.json          # 계획만 보여주고 exit 3
+node tools/install-hooks.mjs graph.json build/hooks.json --yes    # 사용자 승인 후에만
+```
+
+설치자가 지키는 경계 (install.selftest.mjs 12건이 고정):
+- `--yes` 없이는 아무것도 쓰지 않는다. **에이전트가 사용자 승인 없이 --yes 를 붙이는 것은 금지다.**
+- 프로젝트 `.claude/settings.json` 에만 쓴다 — 전역(`~/.claude`)은 `--yes` 여도 거부.
+- 낡은 명세(spec_hash 불일치)는 거부. 남의 훅 항목은 보존. 재설치는 멱등. `--uninstall` 제공.
+
+설치되면 `hooks-gate.mjs` 가 Stop 훅으로 돌며, 게이트 미달 시 exit 2 로 세션 종료를 차단한다.
+그래프가 바뀌면 게이트는 STALE 을 **통과가 아니라 차단**으로 처리한다 — 재컴파일 → 재설치가 해소 경로다.
+설치 전까지 명세는 아무것도 차단하지 않는다 — 이 한계를 완료 보고에 그대로 쓴다.
 
 ## 보장 범위를 항상 쓴다
 

@@ -5,7 +5,7 @@
 **AI 에이전트를 위한 그래프 엔지니어링 — 완전한 하네스, 그리고 스스로를 속이지 못하는 루프.**<br/>
 일을 시작하기 전에 통과 조건을 숫자로 못 박고, 판정은 AI가 아니라 도구가 내립니다.
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-124%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-136%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · **한국어** · [日本語](README.ja.md) · [简体中文](README.zh.md)
 
@@ -18,6 +18,7 @@
 - [실행 흐름](#실행-흐름)
 - [설치](#설치)
 - [돌리는 세 가지 방법](#돌리는-세-가지-방법)
+- [튜토리얼: 실제로 한 번 돌려보기](#튜토리얼-실제로-한-번-돌려보기)
 - [그래프 포맷](#그래프-포맷)
 - [네 숫자](#네-숫자)
 - [도구 하나하나](#도구-하나하나)
@@ -66,7 +67,7 @@ Avalon은 순서를 뒤집습니다. 일을 시작하기 **전에** 계획을 �
 | **검증기** | 필수 필드 전수 검사(G0) + 정적 검사 6종 + 서술형 게이트를 표현 단계에서 거부하는 스키마 |
 | **컴파일러** | 그래프를 멀티 에이전트 워크플로 실행 코드로 번역합니다. 게이트가 하나라도 번역에서 빠지면 거부합니다 (`gate_loss`) |
 | **러너** | 실행 순서를 강제합니다. 차례가 아닌 노드는 시작 못 하고, 측정 없이는 완료 못 하고, 모든 측정은 지울 수 없는 원장에 남습니다 |
-| **훅 명세** | 게이트를 세션 **바깥**에서도 강제할 수 있게 `build/hooks.json`을 산출합니다. 명령 없는 선언은 `hook_loss`로 잡힙니다 |
+| **훅 명세 + 설치자** | 게이트를 세션 **바깥**에서도 강제할 수 있게 `build/hooks.json`을 산출하고, 승인 게이트를 거친 설치자가 프로젝트 settings에 Stop 훅으로 심습니다. 명령 없는 선언은 `hook_loss`로 잡힙니다 |
 | **스캐폴드** | 대상 저장소를 실측해서 검증을 이미 통과하는 골격을 만듭니다 — 초록에서 시작해 초록을 유지합니다 |
 
 ## 4단 아키텍처
@@ -92,7 +93,7 @@ Avalon은 순서를 뒤집습니다. 일을 시작하기 **전에** 계획을 �
 
 ```bash
 git clone https://github.com/Evanciel/avalon && cd avalon
-npm test        # 테스트 124건, 의존성 0개, Node 18+
+npm test        # 테스트 136건, 의존성 0개, Node 18+
 ```
 
 **Claude Code 스킬**로 쓰려면 스킬 디렉터리에 클론하면 됩니다 — [SKILL.md](SKILL.md)의 frontmatter(`name: avalon`)가 등록을 담당합니다:
@@ -153,6 +154,103 @@ node tools/run.mjs graph.json lint            # OR 함정 검사 (한 노드에 
 | 게이트를 `max_retry`보다 많이 실패 | **중단** — 실행이 멈추고 결정이 사람에게 넘어간다 |
 
 수락된 측정은 전부 원장에 덧붙습니다. 원장은 절대 고쳐 쓰지 않고, `init --force`도 상태만 버리지 원장은 남깁니다.
+
+## 튜토리얼: 실제로 한 번 돌려보기
+
+아래는 전부 실제로 일어난 일입니다 — 명령과 출력은 라이브 세션에서 그대로 가져왔고, 실수까지 포함입니다.
+
+작은 Node 프로젝트 `my-api`가 있고, 에이전트에게 검색 엔드포인트를 추가하고 테스트를 통과시키게 하고 싶다고 합시다.
+
+**1. 스캐폴드.** 저장소와 과제 한 줄을 주면:
+
+```bash
+node tools/scaffold.mjs ../my-api "검색 API 추가하고 테스트 통과시키기" ../my-api/graph.json
+```
+
+이미 검증을 통과하는 3노드 골격(`survey → check → review`)이 나옵니다. 스택·규모는 실측되어 있고 해시 두 개가 찍혀 있습니다.
+
+**2. 설계.** 자리표시자를 진짜 계획으로 바꿉니다 — 노드 3개, 게이트 1개:
+
+```jsonc
+"state": [{ "field": "tests_failed", "type": "int", "unit": "count" }],
+"gates": [{
+  "id": "G1", "field": "tests_failed", "op": "==", "threshold": 0,
+  "on_fail": { "goto": "implement", "max_retry": 2 },
+  "ground_truth": "measured",
+  "threshold_source": "테스트 스위트 전수 통과 — 부분 통과는 배포 기준이 아니다"
+}],
+"edges": [
+  { "from": "implement", "to": "test", "when": "always"       },
+  { "from": "test", "to": "implement", "when": "gate:G1:fail" },
+  { "from": "test", "to": "ship",      "when": "gate:G1:pass" }
+]
+```
+
+**3. 스탬프 → 검증.** 이 튜토리얼을 쓰면서 실제로 실수를 했습니다 — 노드 이름을 바꾸고 `graph.entry`를 깜빡했죠. 검증기가 실행 전에 잡았습니다:
+
+```
+$ node tools/validate.mjs graph.json
+  FAIL  도달 가능성
+         ↳ graph.entry 'survey': 그런 노드 없음
+  static_checks_passed  5/6      G4c FAIL
+```
+
+entry를 고치고 재스탬프(`hash.mjs --write`), 재검증 → `6/6`, 커버리지 `1.00`.
+
+**4. 컴파일.**
+
+```
+$ node tools/compile.mjs graph.json build/graph.workflow.js
+  gate_loss  0      G4c-loss PASS
+  hook_loss  0      D7 PASS
+  compiled → build/graph.workflow.js
+  hooks    → build/hooks.json
+```
+
+**5. 집행.** 러너 세션, 출력 원문 그대로 (주석만 추가):
+
+```
+$ run.mjs graph.json init
+$ run.mjs graph.json start ship          # 순서를 건너뛰어 보면
+🔴 프론티어에 없는 노드다: ship
+   지금 할 수 있는 것: implement
+
+$ run.mjs graph.json start implement     # ok — 실제 작업은 여기서
+$ run.mjs graph.json done implement      # 다음이 열림: test
+
+$ run.mjs graph.json start test
+$ run.mjs graph.json done test           # 측정을 깜빡하면
+🔴 게이트를 판정할 수 없다 — 이번 방문의 측정이 없다:
+  G1: tests_failed 를 <한 번도> 안 쟀다
+
+$ run.mjs graph.json measure tests_failed 3 "npm test: 3 failing"
+$ run.mjs graph.json done test
+🔴 G1: tests_failed=3 == 0 → fail        # implement 로 되돌아감 (재시도 1/2)
+
+# ...코드를 고치고, implement → test 를 다시 지나서...
+$ run.mjs graph.json measure tests_failed 0 "npm test: all green"
+$ run.mjs graph.json done test
+🟢 G1: tests_failed=0 == 0 → pass
+
+$ run.mjs graph.json status
+  ▶ ship  (human/manual)  ⏸ 사람 대기      # 비가역 → 출구는 사람이 받는다
+```
+
+일어나지 않은 일에 주목하세요: 아무도 에이전트에게 "다 됐어?"라고 묻지 않았습니다. 3을 내니 도구가 fail이라 했고, 0을 내니 pass라 했습니다.
+
+**6. 세션 바깥에서도 강제하기 (선택).** 컴파일이 이미 `build/hooks.json`을 냈습니다. 설치하면 게이트가 세션의 Stop 훅에 연결되는데 — 설치자는 명시적 승인 없이는 움직이지 않습니다:
+
+```
+$ node tools/install-hooks.mjs graph.json build/hooks.json
+설치 계획 (아직 아무것도 쓰지 않았다):
+  대상    .claude/settings.json
+  훅      Stop → node tools/hooks-gate.mjs graph.json build/hooks.json
+  게이트  G1
+
+승인이 필요하다 — 사용자 확인 후: 같은 명령에 --yes    (exit 3)
+```
+
+`--yes`로 설치하면 그때부터 게이트가 빨간 동안 세션이 턴을 끝낼 수 없습니다(`hooks-gate.mjs`가 exit 2로 차단). 설치 후 그래프가 바뀌면 게이트는 STALE을 통과가 아니라 차단으로 처리합니다 — 재컴파일 → 재설치가 해소 경로입니다. 제거는 언제든 `--uninstall --yes`.
 
 ## 그래프 포맷
 
@@ -244,6 +342,12 @@ IR에서 워크플로 스크립트로 가는 순수 함수입니다. 내부에�
 
 프론티어 규율, 측정 원장, 게이트 판정, STALE 감지, 중단 시 사람 이관. [돌리는 세 가지 방법](#돌리는-세-가지-방법)에서 설명했습니다. 파일 머리의 불변식 4개가 계약이고, 자기시험은 그 각각이 실제로 무는지 증명하려고 존재합니다.
 
+### `install-hooks.mjs` + `hooks-gate.mjs` — 세션을 넘어서는 강제
+
+설치자는 `build/hooks.json`을 **프로젝트의** `.claude/settings.json`에 Stop 훅으로 심습니다. 핵심은 설치자가 지키는 경계입니다: `--yes` 없이는 아무것도 쓰지 않고(계획만 보여주고 exit 3 — 에이전트가 사용자 승인 없이 `--yes`를 붙이는 건 금지), 전역 `~/.claude` settings는 `--yes`여도 거부하고, 해시가 현재 그래프와 안 맞는 낡은 명세를 거부하고, 남의 훅 항목은 보존하고, 재설치는 멱등입니다. `--uninstall --yes`로 언제든 뺄 수 있습니다.
+
+설치되면 `hooks-gate.mjs`가 세션이 턴을 끝내려 할 때마다 선언된 check를 전부 돌립니다: 전부 통과 → exit 0, 하나라도 미달 → exit 2로 종료를 차단하고 미달 게이트를 모델에게 되먹입니다. 그래프가 바뀌면 STALE을 보고하고 차단합니다 — 어제의 규칙을 조용히 강제하는 것보다는 멈추는 게 낫습니다.
+
 ## 규칙이 태어난 곳
 
 이 규칙들은 머리로 설계한 게 아닙니다. 전부 실제로 겪은 버그에서 나왔고, 같은 종류가 반복되면 번호를 붙여서 셉니다:
@@ -276,7 +380,7 @@ IR에서 워크플로 스크립트로 가는 순수 함수입니다. 내부에�
 
 ## 훅: 명세는 설치가 아니다
 
-`compile.mjs`는 `build/hooks.json` — 게이트별 check 명령 + exit 코드 계약 — 까지만 냅니다. 거기서 멈추는 게 의도입니다. 살아있는 세션의 settings에 훅을 설치하는 건 별도의 승인 게이트 단계고, 자동 설치는 금지입니다. 자기를 세션의 강제 계층에 조용히 심는 도구야말로, 이 프로젝트가 막으려고 존재하는 종류의 설명 불가능한 마법이기 때문입니다. 설치 전까지 명세는 아무것도 차단하지 않습니다 — 그리고 완료 보고서는 이 문장을 그대로 쓰도록 요구됩니다.
+`compile.mjs`는 `build/hooks.json` — 게이트별 check 명령 + exit 코드 계약 — 까지만 내고, 거기서 멈추는 게 의도입니다. 설치는 별도 도구가 별도 승인 아래 합니다: `install-hooks.mjs`는 계획을 보여준 뒤 사람이 확인한 `--yes` 전까지 아무것도 쓰지 않고, 프로젝트 settings에만(전역 금지) 설치하며, 설치한 만큼 쉽게 제거됩니다. 자동 설치는 여전히 금지입니다. 자기를 세션의 강제 계층에 조용히 심는 도구야말로, 이 프로젝트가 막으려고 존재하는 종류의 설명 불가능한 마법이기 때문입니다. 설치 전까지 명세는 아무것도 차단하지 않습니다 — 그리고 완료 보고서는 이 문장을 그대로 쓰도록 요구됩니다.
 
 ## 아발론은 아발론 위에서 돈다
 
@@ -286,10 +390,11 @@ IR에서 워크플로 스크립트로 가는 순수 함수입니다. 내부에�
 
 ## 어떻게 테스트하나
 
-`npm test` 하나로 도는 두 스위트, 합계 124건:
+`npm test` 하나로 도는 세 스위트, 합계 136건:
 
-- **[test.mjs](tools/test.mjs) (88건)** — 스키마와 컴파일러 동작, 그리고 **실행 의미론**: 컴파일된 워크플로 산출물을 스텁 호스트에서 실제로 실행합니다. "abandoned가 비어 있지 않으면 completed는 false" 같은 주장이 단언이 아니라 시연됩니다. 배포 동기화 게이트는 런타임 파일 6개를 설치된 스킬 사본과 바이트 대조해서, 저장소와 배포본이 조용히 어긋나는 걸 막습니다.
+- **[test.mjs](tools/test.mjs) (88건)** — 스키마와 컴파일러 동작, 그리고 **실행 의미론**: 컴파일된 워크플로 산출물을 스텁 호스트에서 실제로 실행합니다. "abandoned가 비어 있지 않으면 completed는 false" 같은 주장이 단언이 아니라 시연됩니다. 배포 동기화 게이트는 런타임 파일 8개를 설치된 스킬 사본과 바이트 대조해서, 저장소와 배포본이 조용히 어긋나는 걸 막습니다.
 - **[run.selftest.mjs](tools/run.selftest.mjs) (36건)** — 러너의 거부 방어벽을, 방어벽의 존재를 증명하는 유일한 방법으로 테스트합니다: *가드를 지우면 스위트가 빨개져야 한다.* 각 테스트는 금지된 상황(프론티어 밖 start, 측정 없는 done, 그래프 고치고 계속, 원장 조작)을 구성하고, 러너가 거부해야만 통과합니다.
+- **[install.selftest.mjs](tools/install.selftest.mjs) (12건)** — 설치자의 경계를 같은 방법으로: `--yes` 없이 쓰기 금지, 전역 거부, 낡은 명세 거부, 남의 훅 보존, 멱등 재설치, 그리고 게이트의 미달·STALE 차단(exit 2).
 
 CI는 ubuntu와 windows에서 두 스위트를 다 돌립니다. 줄바꿈은 [.gitattributes](.gitattributes)로 LF에 고정했습니다 — G0b가 바이트 단위 오라클이라, CRLF 체크아웃은 엄밀히 다른 문서이기 때문입니다.
 
@@ -305,8 +410,11 @@ tools/
   render.mjs             JSON → 마크다운 (--check = 바이트 단위 오라클)
   compile.mjs            IR → 워크플로 스크립트 + hooks.json (LLM을 부르지 않음)
   run.mjs                러너 — 프론티어, 측정 원장, 게이트 판정
+  install-hooks.mjs      승인 게이트 훅 설치자 (프로젝트 settings 한정)
+  hooks-gate.mjs         Stop 훅 집행자 — 빨간 게이트는 턴 종료를 차단
   test.mjs               스키마·컴파일러·실행 의미론 테스트 (88건)
   run.selftest.mjs       러너 자기시험 — "가드를 지우면 빨개지는가" (36건)
+  install.selftest.mjs   설치자·게이트 자기시험 — 승인·범위·STALE 방어벽 (12건)
 docs/graph/              설계 이력, IR 명세, 위 흉터 기록의 원본
 images/                  이 README의 다이어그램들
 ```
@@ -314,7 +422,7 @@ images/                  이 README의 다이어그램들
 ## 정직한 한계
 
 - 도구가 증명하는 건 **선언된 오라클**뿐입니다. check 명령이 게이트 제목과 같은 뜻인지는 여전히 사람이 봐야 합니다.
-- `build/hooks.json`은 명세입니다. 설치되기 전까지는 아무것도 차단하지 않습니다 (설치는 별도 승인 단계).
+- `build/hooks.json`은 명세입니다. `install-hooks.mjs --yes`(사람 승인 단계)로 설치되기 전까지는 아무것도 차단하지 않습니다.
 - 에이전트 노드가 런타임에 만드는 산출물은 컴파일 시점에 대조할 수 없습니다.
 
 전체 목록은 자기적용 그래프의 `guarantees` 블록에 있습니다.

@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | spec.version | `1.4.0` |
-| spec.hash | `sha256:cc2a15acd060d3271fd070999d80fb7f92e399808820a63bd2fe8459f3022038` |
+| spec.hash | `sha256:ebc8f3f8ff20198c7da912952f921b86a7b2fd1d05882681d056f3cd0fbd2d14` |
 | mode | `B` |
 
 ## project.fingerprint
@@ -117,7 +117,7 @@
 | `backend` | ② BACKEND. IR → 실행 스크립트·훅. LLM-free 순수 함수여야 한다 (INV-1) |
 | `compile_check` | G4a(컴파일 결정론)를 산출한다. backend의 G4c와 분리 — 실패 원인이 다르다 |
 | `human_go` | 최종 인수. 전역 settings.json을 건드리기 직전이라 사람이 출구를 받아야 한다 |
-| `install_hooks` | 유일한 비가역 노드. 전역 settings.json 수정 — X3 미해소 상태라 현재 실행 금지 |
+| `install_hooks` | 유일한 비가역 노드. 프로젝트 .claude/settings.json 수정 — human_go 승인 뒤 install-hooks.mjs --yes 로만 실행 |
 
 ## 판정
 
@@ -144,5 +144,5 @@
 | | 내용 |
 |---|---|
 | 보장하는 것 | G0 통과 시 IR이 기계 판독 가능하고 필수 13필드가 전부 채워짐 · G4c 통과 시 서술형 게이트·상태 밖 참조·비가역 무단실행·도달불가·무한루프·엣지 깨짐 6종이 없음 · G0b 통과 시 graph.md가 graph.json에서 렌더된 것이며 손으로 고쳐지지 않음 · hook_loss 0 시 훅 강제를 선언한 게이트({gate,check})가 전부 build/hooks.json 에 실림 · 산출 코드의 completed 는 abandoned 가 비어 있을 때만 true — partial 소진이 성공으로 둔갑하지 않음 |
-| **보장하지 않는 것** | 훅은 build/hooks.json 산출까지만 — .claude/settings 설치는 install_hooks 승인 뒤다 (X3 미해소, 자동 설치 금지) · install_hooks 노드는 X3(훅 격리 모델) 미조사 상태이므로 실행 금지 · project.fingerprint의 판별력 미검증 — 표본 0건, 프로젝트 10개 축적 시 재검토 · G8 임계값 10은 assumed — 이 저장소에서 측정된 적 없음 · G8(archive_cases)은 이 그래프에서 제거했다 — ④ ARCHIVE 노드가 없어 산출 노드도 분기도 없는 죽은 게이트였다. v4 명세에는 남아 있다 · 실행 기록(.avalon/runs)은 운영자 기록 방식 — workflow-script 는 파일을 쓸 수 없어 반환값에 state_file 경로만 싣는다 |
+| **보장하지 않는 것** | 훅 설치는 install-hooks.mjs 가 프로젝트 .claude/settings.json 에만, --yes 승인 하에 수행 — 전역 설치·자동 설치·낡은 명세는 도구가 거부한다. 설치 전까지 명세는 아무것도 차단하지 않는다 · X3(훅 격리)는 설치자 경계로 해소 — 프로젝트 범위 한정·승인 필수·타 훅 보존·STALE 차단, install.selftest.mjs 12건이 고정 · project.fingerprint의 판별력 미검증 — 표본 0건, 프로젝트 10개 축적 시 재검토 · G8 임계값 10은 assumed — 이 저장소에서 측정된 적 없음 · G8(archive_cases)은 이 그래프에서 제거했다 — ④ ARCHIVE 노드가 없어 산출 노드도 분기도 없는 죽은 게이트였다. v4 명세에는 남아 있다 · 실행 기록(.avalon/runs)은 운영자 기록 방식 — workflow-script 는 파일을 쓸 수 없어 반환값에 state_file 경로만 싣는다 |
 

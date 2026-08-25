@@ -444,7 +444,7 @@ export function gateLoss(g, src) {
  *    쳐다보지 않았다. requires_approval(네 번째)·fingerprint(두 번째)와 같은 계열:
  *    **검증되고 폐기된 선언.** 이제 선언은 기계(check 명령)를 동반해야만 훅으로 실린다.
  *
- * 산출은 명세 파일까지다. .claude/settings 설치는 install_hooks 노드(승인 필요)의 일 — X3 미해소.
+ * 산출은 명세 파일까지다. 설치는 install-hooks.mjs(--yes 승인 필수, 프로젝트 범위만)의 일 — 자동 설치 금지.
  */
 export function compileHooks(g) {
   const entries = g.graph?.host?.enforced_by_hook ?? []
@@ -463,7 +463,7 @@ export function compileHooks(g) {
     spec_hash: g.graph.spec.hash,
     hooks,
     install: {
-      by: 'install_hooks 노드 (requires_approval) — 자동 설치 금지 (X3 미해소)',
+      by: 'install-hooks.mjs --yes (사용자 승인 필수, 프로젝트 .claude/settings.json 에만) — 자동 설치 금지',
       contract: '각 check 는 게이트 미달 시 exit != 0 이어야 한다. 훅 호스트가 exit 로 차단한다',
     },
   }, null, 2) + '\n'

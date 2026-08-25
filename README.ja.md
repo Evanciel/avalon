@@ -5,7 +5,7 @@
 **AIエージェントのためのグラフエンジニアリング — 完全なハーネスと、自分を騙せないループ。**<br/>
 作業を始める前に合格条件を数字で固定し、判定はAIではなくツールが下します。
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-124%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-136%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · [한국어](README.ko.md) · **日本語** · [简体中文](README.zh.md)
 
@@ -18,6 +18,7 @@
 - [実行の流れ](#実行の流れ)
 - [インストール](#インストール)
 - [回し方は3通り](#回し方は3通り)
+- [チュートリアル: 実際に1回回す](#チュートリアル-実際に1回回す)
 - [グラフのフォーマット](#グラフのフォーマット)
 - [4つの数字](#4つの数字)
 - [ツールを1つずつ](#ツールを1つずつ)
@@ -66,7 +67,7 @@ Avalonは順序をひっくり返します。作業を始める**前に**、計�
 | **バリデータ** | 必須フィールド全数検査(G0) + 静的検査6種 + 記述式ゲートを表現の段階で拒否するスキーマ |
 | **コンパイラ** | グラフをマルチエージェントのワークフロー実行コードに変換。ゲートが1つでも変換から漏れたら拒否する (`gate_loss`) |
 | **ランナー** | 実行時に順序を強制。順番でないノードは開始できず、測定なしでは完了できず、すべての測定は追記専用の台帳に残る |
-| **フック仕様** | ゲートをセッションの**外**からも強制できるよう `build/hooks.json` を出力。コマンドのない宣言は `hook_loss` が捕まえる |
+| **フック仕様 + インストーラ** | ゲートをセッションの**外**からも強制できるよう `build/hooks.json` を出力し、承認ゲート付きのインストーラがプロジェクトのsettingsにStopフックとして配線する。コマンドのない宣言は `hook_loss` が捕まえる |
 | **スキャフォールド** | 対象リポジトリを実測し、すでに検証を通るスケルトンを生成 — 緑から始めて緑を保つ |
 
 ## 4ステージ構成
@@ -92,7 +93,7 @@ Avalonは4つのステージとして設計されており、このリポジト�
 
 ```bash
 git clone https://github.com/Evanciel/avalon && cd avalon
-npm test        # テスト124件、依存関係0、Node 18+
+npm test        # テスト136件、依存関係0、Node 18+
 ```
 
 **Claude Codeのスキル**として使うには、スキルディレクトリにクローンするだけです — [SKILL.md](SKILL.md)のfrontmatter(`name: avalon`)が登録を担います:
@@ -153,6 +154,101 @@ node tools/run.mjs graph.json lint            # ORの罠検査(1ノードにゲ�
 | ゲートを `max_retry` 回より多く失敗 | **停止** — 実行が止まり、決定が人間に渡る |
 
 受理された測定はすべて台帳に追記されます。台帳は決して書き換えられず、`init --force` も状態を捨てるだけで台帳は残します。
+
+## チュートリアル: 実際に1回回す
+
+以下はすべて実際に起きたことです — コマンドと出力はライブセッションからそのまま、失敗も含めて。(ツールのメッセージは現在韓国語です。訳を添えています。)
+
+小さなNodeプロジェクト `my-api` があり、エージェントに検索エンドポイントを追加してテストを通させたいとします。
+
+**1. スキャフォールド。** リポジトリとタスク一行を渡す:
+
+```bash
+node tools/scaffold.mjs ../my-api "検索APIを追加してテストを通す" ../my-api/graph.json
+```
+
+すでに検証を通る3ノードのスケルトン(`survey → check → review`)が出ます。スタックと規模は実測済み、ハッシュも2つ刻印済み。
+
+**2. 設計。** プレースホルダを本物の計画に置き換える — ノード3つ、ゲート1つ:
+
+```jsonc
+"state": [{ "field": "tests_failed", "type": "int", "unit": "count" }],
+"gates": [{
+  "id": "G1", "field": "tests_failed", "op": "==", "threshold": 0,
+  "on_fail": { "goto": "implement", "max_retry": 2 },
+  "ground_truth": "measured",
+  "threshold_source": "スイート全数通過 — 部分通過はリリース基準ではない"
+}],
+"edges": [
+  { "from": "implement", "to": "test", "when": "always"       },
+  { "from": "test", "to": "implement", "when": "gate:G1:fail" },
+  { "from": "test", "to": "ship",      "when": "gate:G1:pass" }
+]
+```
+
+**3. スタンプ → 検証。** このチュートリアルを書きながら実際にミスをしました — ノード名を変えて `graph.entry` を忘れたのです。バリデータが実行前に捕まえました:
+
+```
+$ node tools/validate.mjs graph.json
+  FAIL  到達可能性
+         ↳ graph.entry 'survey': そんなノードは無い
+  static_checks_passed  5/6      G4c FAIL
+```
+
+entryを直し、再スタンプ(`hash.mjs --write`)、再検証 → `6/6`、カバレッジ `1.00`。
+
+**4. コンパイル。**
+
+```
+$ node tools/compile.mjs graph.json build/graph.workflow.js
+  gate_loss  0      PASS
+  hook_loss  0      PASS
+  compiled → build/graph.workflow.js
+  hooks    → build/hooks.json
+```
+
+**5. 実行。** ランナーのセッション(注釈のみ追加):
+
+```
+$ run.mjs graph.json init
+$ run.mjs graph.json start ship          # 順番を飛ばそうとすると
+🔴 フロンティアに無いノードだ: ship — 今できるのは: implement
+
+$ run.mjs graph.json start implement     # ok — 実作業はここで
+$ run.mjs graph.json done implement      # 次が開く: test
+
+$ run.mjs graph.json start test
+$ run.mjs graph.json done test           # 測定を忘れると
+🔴 ゲートを判定できない — 今回の訪問の測定が無い:
+   G1: tests_failed は一度も測っていない
+
+$ run.mjs graph.json measure tests_failed 3 "npm test: 3 failing"
+$ run.mjs graph.json done test
+🔴 G1: tests_failed=3 == 0 → fail        # implement に戻る (リトライ 1/2)
+
+# ...コードを直して、implement → test をもう一度通って...
+$ run.mjs graph.json measure tests_failed 0 "npm test: all green"
+$ run.mjs graph.json done test
+🟢 G1: tests_failed=0 == 0 → pass
+
+$ run.mjs graph.json status
+  ▶ ship  (human/manual)  ⏸ 人間待ち       # 不可逆 → 出口は人間が受け取る
+```
+
+起きなかったことに注目してください: 誰もエージェントに「終わった?」と聞いていません。3を出せばツールがfailと言い、0を出せばpassと言った — それだけです。
+
+**6. セッションの外からも強制する(任意)。** コンパイルはすでに `build/hooks.json` を出しています。インストールするとゲートがセッションのStopフックに配線されますが — インストーラは明示的な承認なしには動きません:
+
+```
+$ node tools/install-hooks.mjs graph.json build/hooks.json
+インストール計画(まだ何も書いていない):
+  対象    .claude/settings.json
+  フック  Stop → node tools/hooks-gate.mjs graph.json build/hooks.json
+  ゲート  G1
+承認が必要 — ユーザー確認後: 同じコマンドに --yes    (exit 3)
+```
+
+`--yes` でインストールすると、それ以降ゲートが赤い間はセッションがターンを終えられません(`hooks-gate.mjs` がexit 2で停止をブロック)。インストール後にグラフが変わるとゲートはSTALEを報告し、古いルールで通す代わりにブロックします — 再コンパイル → 再インストールが解消経路です。削除はいつでも `--uninstall --yes`。
 
 ## グラフのフォーマット
 
@@ -244,6 +340,12 @@ IRからワークフロースクリプトへの純関数です。内部では非
 
 フロンティア規律、測定台帳、ゲート判定、STALE検知、停止時の人間への引き渡し。[回し方は3通り](#回し方は3通り)で説明した通りです。ファイル冒頭の不変条件4つが契約であり、自己試験はその1つ1つが実際に噛みつくことを証明するために存在します。
 
+### `install-hooks.mjs` + `hooks-gate.mjs` — セッションを超える強制
+
+インストーラは `build/hooks.json` を**プロジェクトの** `.claude/settings.json` にStopフックとして配線します。要点はその境界です: `--yes` なしには何も書かない(計画だけ見せてexit 3 — エージェントがユーザーの了承なしに `--yes` を付けるのは禁止)、グローバルの `~/.claude` settingsは `--yes` があっても拒否、ハッシュが現在のグラフと合わない古い仕様は拒否、他人のフック項目は保存、再インストールは冪等。`--uninstall --yes` でいつでも外せます。
+
+インストール後は、セッションがターンを終えようとするたびに `hooks-gate.mjs` が宣言済みcheckを全部回します: 全部通過 → exit 0、1つでも未達 → exit 2で終了をブロックし、未達ゲートをモデルに返します。グラフが変わればSTALEを報告してブロック — 昨日のルールを黙って強制するより、止まるほうが正直です。
+
 ## ルールが生まれた場所
 
 これらのルールは机上で設計されたものではありません。すべて実際に起きたバグから生まれ、同じ*種類*のバグが繰り返されると番号が付きます:
@@ -276,7 +378,7 @@ IRからワークフロースクリプトへの純関数です。内部では非
 
 ## フック: 仕様はインストールではない
 
-`compile.mjs` は `build/hooks.json` — ゲートごとのcheckコマンド + exitコード契約 — までしか出しません。そこで止まるのが意図です。生きているセッションのsettingsにフックをインストールするのは別の承認付きステップであり、自動インストールは禁止です。自分をセッションの強制レイヤーに黙って組み込むツールこそ、このプロジェクトが防ぐために存在する種類の説明不能な魔法だからです。インストールされるまで仕様は何もブロックしません — そして完了報告にはこの文をそのまま書くことが求められます。
+`compile.mjs` は `build/hooks.json` — ゲートごとのcheckコマンド + exitコード契約 — までしか出さず、そこで止まるのが意図です。インストールは別のツールが別の承認の下で行います: `install-hooks.mjs` は計画を見せ、人間が確認した `--yes` までは何も書かず、プロジェクトのsettingsにのみ(グローバル禁止)インストールし、インストールと同じ手軽さでアンインストールできます。自動インストールは今も禁止です。自分をセッションの強制レイヤーに黙って組み込むツールこそ、このプロジェクトが防ぐために存在する種類の説明不能な魔法だからです。インストールされるまで仕様は何もブロックしません — そして完了報告にはこの文をそのまま書くことが求められます。
 
 ## AvalonはAvalonの上で回る
 
@@ -286,10 +388,11 @@ IRからワークフロースクリプトへの純関数です。内部では非
 
 ## どうテストしているか
 
-`npm test` 1つで回る2つのスイート、合計124件:
+`npm test` 1つで回る3つのスイート、合計136件:
 
-- **[test.mjs](tools/test.mjs) (88件)** — スキーマとコンパイラの挙動、そして**実行意味論**: コンパイルされたワークフロー出力をスタブホストで実際に実行します。「abandonedが空でなければcompletedはfalse」のような主張が、断言ではなく実演されます。デプロイ同期ゲートはランタイムファイル6個をインストール済みスキルのコピーとバイト照合し、リポジトリと配備物が静かにずれるのを防ぎます。
+- **[test.mjs](tools/test.mjs) (88件)** — スキーマとコンパイラの挙動、そして**実行意味論**: コンパイルされたワークフロー出力をスタブホストで実際に実行します。「abandonedが空でなければcompletedはfalse」のような主張が、断言ではなく実演されます。デプロイ同期ゲートはランタイムファイル8個をインストール済みスキルのコピーとバイト照合し、リポジトリと配備物が静かにずれるのを防ぎます。
 - **[run.selftest.mjs](tools/run.selftest.mjs) (36件)** — ランナーの拒否の壁を、壁の存在を証明する唯一の方法でテストします: *ガードを消せばスイートが赤くならなければならない。* 各テストは禁止された状況(フロンティア外のstart、測定なしのdone、グラフを直して続行、台帳の改竄)を構成し、ランナーが拒否したときだけ通ります。
+- **[install.selftest.mjs](tools/install.selftest.mjs) (12件)** — インストーラの境界を同じ方法で: `--yes` なしの書き込み禁止、グローバル拒否、古い仕様の拒否、他人のフック保存、冪等な再インストール、そしてゲートの未達・STALEブロック(exit 2)。
 
 CIはubuntuとwindowsで両スイートを回します。改行は [.gitattributes](.gitattributes) でLFに固定しています — G0bはバイト単位のオラクルなので、CRLFのチェックアウトは厳密には別の文書だからです。
 
@@ -305,8 +408,11 @@ tools/
   render.mjs             JSON → markdown (--checkはバイト単位のオラクル)
   compile.mjs            IR → ワークフロースクリプト + hooks.json (LLMを呼ばない)
   run.mjs                ランナー — フロンティア、測定台帳、ゲート判定
+  install-hooks.mjs      承認ゲート付きフックインストーラ (プロジェクトsettings限定)
+  hooks-gate.mjs         Stopフック実行者 — 赤いゲートはターン終了をブロック
   test.mjs               スキーマ・コンパイラ・実行意味論テスト (88件)
   run.selftest.mjs       ランナー自己試験 — 「ガードを消したら赤くなるか」(36件)
+  install.selftest.mjs   インストーラ・ゲート自己試験 — 承認・範囲・STALEの壁 (12件)
 docs/graph/              設計史、IR仕様、上の傷跡の原本
 images/                  このREADMEの図
 ```
@@ -314,8 +420,9 @@ images/                  このREADMEの図
 ## 正直な限界
 
 - ツールが証明するのは**宣言されたオラクル**だけです。checkコマンドがゲートの題名と同じ意味かどうかは、いまも人間が見る必要があります。
-- `build/hooks.json` は仕様です。インストールされるまで(別の承認付きステップ)何もブロックしません。
+- `build/hooks.json` は仕様です。`install-hooks.mjs --yes`(人間承認のステップ)でインストールされるまで何もブロックしません。
 - エージェントノードが実行時に作る成果物は、コンパイル時に照合できません。
+- ツールのメッセージは現在韓国語です。exitコードとJSON出力は言語に依存しませんが、文章はまだです。
 
 完全な最新リストは自己適用グラフの `guarantees` ブロックにあります。
 

@@ -137,7 +137,7 @@ function skeleton({ root, task, name, files, modules, stack, markers }) {
       host: {
         pipeline: 'workflow-script',
         reason: 'TODO: 왜 이 호스트인가',
-        state_file: '.avalon/runs/<run_id>.jsonl',
+        state_file: '.avalon/run.state.json',   // 러너가 바로 쓸 수 있는 구체 경로 — 골격은 실행까지 초록이어야 한다
         enforced_by_hook: ['G0'],
       },
       target: { root, vcs: existsSync(join(root, '.git')) ? 'git' : 'none' },

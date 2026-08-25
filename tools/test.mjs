@@ -807,7 +807,7 @@ t('avalon/tools 와 skill/tools 가 갈라지지 않았다', () => {
   if (sha256(DEV) === sha256(RUNTIME + '/')) return  // 자기 자신과 비교하는 경우
   // run.mjs 는 미러에만 있고 정본에 없던 역방향 드리프트가 실제로 있었다 (2026-08-25 발견).
   // 4파일만 검사하던 이 게이트가 못 잡았다 — 이제 러너·스캐폴드까지 전부 잰다.
-  for (const f of ['hash.mjs', 'validate.mjs', 'render.mjs', 'compile.mjs', 'run.mjs', 'scaffold.mjs']) {
+  for (const f of ['hash.mjs', 'validate.mjs', 'render.mjs', 'compile.mjs', 'run.mjs', 'scaffold.mjs', 'hooks-gate.mjs', 'install-hooks.mjs']) {
     const a = sha256(readFileSync(DEV + f, 'utf8'))
     const b = sha256(readFileSync(`${RUNTIME}/${f}`, 'utf8'))
     eq(a, b, `${f} 가 두 위치에서 다름 — 재배포 필요:`)

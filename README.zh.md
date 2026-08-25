@@ -5,7 +5,7 @@
 **面向 AI 智能体的图工程 — 一套完整的执行框架，和骗不了自己的循环。**<br/>
 在开工之前就把通过条件钉成数字，裁决交给工具，而不是 AI 自己。
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-124%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-136%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · **简体中文**
 
@@ -18,6 +18,7 @@
 - [一次运行的流程](#一次运行的流程)
 - [安装](#安装)
 - [三种运行方式](#三种运行方式)
+- [教程:真刀真枪跑一遍](#教程真刀真枪跑一遍)
 - [图的格式](#图的格式)
 - [四个数字](#四个数字)
 - [逐个工具讲](#逐个工具讲)
@@ -66,7 +67,7 @@ Avalon 把顺序反过来。在开工**之前**,先把计划画成一张图:节�
 | **验证器** | 必填字段全量检查(G0) + 6 项静态检查 + 在表达层面就拒绝描述性门的模式 |
 | **编译器** | 把图翻译成可执行的多智能体工作流。哪怕有一个门在翻译中丢失,就拒绝编译 (`gate_loss`) |
 | **运行器** | 在执行时强制顺序。不能跳序启动节点,不能不测量就完成节点,每次测量都记入只增不改的台账 |
-| **钩子规格** | 输出 `build/hooks.json`,让门也能从会话**外部**被强制执行。声明了钩子却没有真实命令,会被 `hook_loss` 抓住 |
+| **钩子规格 + 安装器** | 输出 `build/hooks.json`,让门也能从会话**外部**被强制执行 — 再由带审批门的安装器把它作为 Stop 钩子接进项目 settings。声明了钩子却没有真实命令,会被 `hook_loss` 抓住 |
 | **脚手架** | 实测目标仓库,生成一个已经通过验证的骨架 — 从绿色开始,保持绿色 |
 
 ## 四个阶段
@@ -92,7 +93,7 @@ Avalon 的架构是四个阶段,这个仓库里的工具就是它们的实现:
 
 ```bash
 git clone https://github.com/Evanciel/avalon && cd avalon
-npm test        # 124 个测试,零依赖,Node 18+
+npm test        # 136 个测试,零依赖,Node 18+
 ```
 
 要作为 **Claude Code 技能**使用,克隆到技能目录即可 — [SKILL.md](SKILL.md) 的 frontmatter(`name: avalon`)负责注册:
@@ -153,6 +154,101 @@ node tools/run.mjs graph.json lint            # OR 陷阱检查(一个节点两�
 | 门失败次数超过 `max_retry` | **停机** — 运行停止,决定权交还给人 |
 
 每条被接受的测量都追加到台账。台账永不改写,`init --force` 也只丢弃状态、保留台账。
+
+## 教程:真刀真枪跑一遍
+
+下面的一切都真实发生过 — 命令和输出取自一次实况会话,连失误都包括在内。(工具消息目前是韩语,附有译文。)
+
+假设你有个小 Node 项目 `my-api`,想让智能体加一个搜索端点并让测试通过。
+
+**1. 脚手架。** 给它仓库路径和一句话任务:
+
+```bash
+node tools/scaffold.mjs ../my-api "加搜索 API 并让测试通过" ../my-api/graph.json
+```
+
+你会得到一个已经通过验证的三节点骨架(`survey → check → review`),技术栈和规模已实测,两个哈希已盖章。
+
+**2. 设计。** 把占位符换成真实计划 — 三个节点,一个门:
+
+```jsonc
+"state": [{ "field": "tests_failed", "type": "int", "unit": "count" }],
+"gates": [{
+  "id": "G1", "field": "tests_failed", "op": "==", "threshold": 0,
+  "on_fail": { "goto": "implement", "max_retry": 2 },
+  "ground_truth": "measured",
+  "threshold_source": "整个套件必须全过 — 部分通过不是发布标准"
+}],
+"edges": [
+  { "from": "implement", "to": "test", "when": "always"       },
+  { "from": "test", "to": "implement", "when": "gate:G1:fail" },
+  { "from": "test", "to": "ship",      "when": "gate:G1:pass" }
+]
+```
+
+**3. 盖章 → 验证。** 写这个教程时我们真出了个错 — 改了节点名却忘了 `graph.entry`。验证器在任何东西运行之前就抓住了它:
+
+```
+$ node tools/validate.mjs graph.json
+  FAIL  可达性
+         ↳ graph.entry 'survey': 没有这个节点
+  static_checks_passed  5/6      G4c FAIL
+```
+
+改好 entry,重新盖章(`hash.mjs --write`),重新验证 → `6/6`,覆盖率 `1.00`。
+
+**4. 编译。**
+
+```
+$ node tools/compile.mjs graph.json build/graph.workflow.js
+  gate_loss  0      PASS
+  hook_loss  0      PASS
+  compiled → build/graph.workflow.js
+  hooks    → build/hooks.json
+```
+
+**5. 执行。** 运行器会话实录(仅添加注释):
+
+```
+$ run.mjs graph.json init
+$ run.mjs graph.json start ship          # 想跳步的话
+🔴 不在前沿集的节点: ship — 你现在能启动的是: implement
+
+$ run.mjs graph.json start implement     # ok — 真正的活在这里干
+$ run.mjs graph.json done implement      # 打开下一个: test
+
+$ run.mjs graph.json start test
+$ run.mjs graph.json done test           # 忘了测量的话
+🔴 无法裁决这个门 — 本次访问没有测量:
+   G1: tests_failed 一次都没测过
+
+$ run.mjs graph.json measure tests_failed 3 "npm test: 3 failing"
+$ run.mjs graph.json done test
+🔴 G1: tests_failed=3 == 0 → fail        # 退回 implement(重试 1/2)
+
+# ...修好代码,再走一遍 implement → test...
+$ run.mjs graph.json measure tests_failed 0 "npm test: all green"
+$ run.mjs graph.json done test
+🟢 G1: tests_failed=0 == 0 → pass
+
+$ run.mjs graph.json status
+  ▶ ship  (human/manual)  ⏸ 等待人类      # 不可逆 → 出口由人来接
+```
+
+注意没有发生的事:从头到尾没人问过智能体"做完了吗?"。它报 3,工具说 fail;它报 0,工具说 pass — 仅此而已。
+
+**6. 从会话外部也强制执行(可选)。** 编译已经输出了 `build/hooks.json`。安装后,门会接进会话的 Stop 钩子 — 但安装器在没有明确审批之前拒绝动手:
+
+```
+$ node tools/install-hooks.mjs graph.json build/hooks.json
+安装计划(还什么都没写):
+  目标    .claude/settings.json
+  钩子    Stop → node tools/hooks-gate.mjs graph.json build/hooks.json
+  门      G1
+需要审批 — 用户确认后:同一条命令加 --yes    (exit 3)
+```
+
+加 `--yes` 安装之后,只要有门是红的,会话就真的无法结束回合(`hooks-gate.mjs` 以 exit 2 拦截)。安装后图变了,门会报 STALE 并拦截,而不是按旧规则放行 — 重新编译 → 重新安装才是解法。随时可用 `--uninstall --yes` 卸载。
 
 ## 图的格式
 
@@ -244,6 +340,12 @@ node tools/run.mjs graph.json lint            # OR 陷阱检查(一个节点两�
 
 前沿集纪律、测量台账、门裁决、STALE 检测、停机交人。在[三种运行方式](#三种运行方式)里讲过了;文件开头的四条不变式就是契约,自检的存在就是为了证明每一条真的会咬人。
 
+### `install-hooks.mjs` + `hooks-gate.mjs` — 超越会话的强制执行
+
+安装器把 `build/hooks.json` 作为 Stop 钩子接进**项目的** `.claude/settings.json`。重点在它守住的边界:没有 `--yes` 就什么都不写(只打印计划并 exit 3 — 智能体不得在未经用户许可时自行加 `--yes`);全局 `~/.claude` settings 即使加了 `--yes` 也拒绝;哈希对不上当前图的过期规格拒绝;别人的钩子条目原样保留;重复安装幂等。`--uninstall --yes` 随时卸载。
+
+装好之后,每当会话要结束回合,`hooks-gate.mjs` 就跑一遍所有已声明的 check:全过 → exit 0;有一个不过 → exit 2 拦截结束,并把不合格的门反馈给模型。图变了就报 STALE 并拦截 — 悄悄执行昨天的规则,比停下来更不诚实。
+
 ## 规则从哪里来
 
 这些规则不是在白板上设计出来的。每一条都源自真实漏过去的 bug,同一*类* bug 重复出现时,就给它编号:
@@ -276,7 +378,7 @@ node tools/run.mjs graph.json lint            # OR 陷阱检查(一个节点两�
 
 ## 钩子:规格不等于安装
 
-`compile.mjs` 只输出到 `build/hooks.json` 为止 — 每个门的 check 命令 + 退出码契约。停在那里是有意的。把钩子安装进活动会话的 settings 是另一个需要审批的步骤,自动安装被禁止:一个悄悄把自己接进你会话强制层的工具,恰恰是这个项目要防的那种无法问责的魔法。安装之前,规格不拦截任何东西 — 而且完成报告被要求原样写出这句话。
+`compile.mjs` 只输出到 `build/hooks.json` 为止 — 每个门的 check 命令 + 退出码契约 — 停在那里是有意的。安装由另一个工具、在另一次审批之下完成:`install-hooks.mjs` 先展示计划,在人确认的 `--yes` 之前什么都不写,只装进项目 settings(永不碰全局),卸载和安装一样容易。自动安装依然被禁止:一个悄悄把自己接进你会话强制层的工具,恰恰是这个项目要防的那种无法问责的魔法。安装之前,规格不拦截任何东西 — 而且完成报告被要求原样写出这句话。
 
 ## Avalon 跑在 Avalon 上
 
@@ -286,10 +388,11 @@ node tools/run.mjs graph.json lint            # OR 陷阱检查(一个节点两�
 
 ## 怎么测试的
 
-`npm test` 一条命令跑两个套件,共 124 个:
+`npm test` 一条命令跑三个套件,共 136 个:
 
-- **[test.mjs](tools/test.mjs)(88 个)** — 模式和编译器行为,包括**执行语义**:编译出的工作流产物在打桩的宿主上被真正执行,所以"abandoned 非空时 completed 为 false"这类主张是演示出来的,不是断言出来的。部署同步门把 6 个运行时文件与已安装的技能副本逐字节比对,仓库和部署版无法悄悄漂移。
+- **[test.mjs](tools/test.mjs)(88 个)** — 模式和编译器行为,包括**执行语义**:编译出的工作流产物在打桩的宿主上被真正执行,所以"abandoned 非空时 completed 为 false"这类主张是演示出来的,不是断言出来的。部署同步门把 8 个运行时文件与已安装的技能副本逐字节比对,仓库和部署版无法悄悄漂移。
 - **[run.selftest.mjs](tools/run.selftest.mjs)(36 个)** — 用唯一能证明护栏存在的方法测试运行器的拒绝墙:*删掉护栏,套件必须变红。* 每个测试构造一种被禁止的局面(跳前沿集的 start、没测量的 done、改图继续跑、篡改台账),只有运行器拒绝了才算通过。
+- **[install.selftest.mjs](tools/install.selftest.mjs)(12 个)** — 用同样的方法测安装器的边界:无 `--yes` 不写、拒绝全局、拒绝过期规格、保留他人钩子、幂等重装,以及门在不合格与 STALE 时的拦截(exit 2)。
 
 CI 在 ubuntu 和 windows 上跑全部两个套件。换行符通过 [.gitattributes](.gitattributes) 钉死为 LF — 因为 G0b 是逐字节的判据,CRLF 检出严格来说就是另一份文档。
 
@@ -305,8 +408,11 @@ tools/
   render.mjs             JSON → markdown(--check 为逐字节判据)
   compile.mjs            IR → 工作流脚本 + hooks.json(从不调用 LLM)
   run.mjs                运行器 — 前沿集、测量台账、门裁决
+  install-hooks.mjs      带审批门的钩子安装器(仅限项目 settings)
+  hooks-gate.mjs         Stop 钩子执行者 — 红灯的门拦截回合结束
   test.mjs               模式 / 编译器 / 执行语义测试(88 个)
   run.selftest.mjs       运行器自检 — "删掉护栏会变红吗"(36 个)
+  install.selftest.mjs   安装器/门自检 — 审批·范围·STALE 之墙(12 个)
 docs/graph/              设计史、IR 规格、上述伤疤的原始记录
 images/                  本 README 的示意图
 ```
@@ -314,8 +420,9 @@ images/                  本 README 的示意图
 ## 诚实的边界
 
 - 工具只能证明**声明了的判据**。check 命令和它的人类语言标题是否同一个意思,仍然要靠人看。
-- `build/hooks.json` 只是规格。在被安装之前(单独的、需审批的步骤),它不会拦截任何东西。
+- `build/hooks.json` 只是规格。在通过 `install-hooks.mjs --yes`(人工审批的步骤)安装之前,它不会拦截任何东西。
 - 智能体节点在运行时产生的产物,无法在编译期比对。
+- 工具消息目前是韩语。退出码和 JSON 输出与语言无关,但文案还不是。
 
 完整的当前清单在自我应用图的 `guarantees` 块里。
 
