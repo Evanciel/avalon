@@ -1,0 +1,8 @@
+# 컴파일 산출물 — graph.json(정본)에서 재생성한다: node tools/compile.mjs graph.json build/graph.workflow.js
+build/
+
+# 실행 상태·원장 — 런타임 산출물 (run.mjs)
+.avalon/
+
+node_modules/
+*.log

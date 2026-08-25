@@ -1,0 +1,522 @@
+{
+  "graph": {
+    "spec": {
+      "version": "1.4.0",
+      "hash": "sha256:2a3c511099fdcbfd5e1b01624151d582984dcbd76d58ffe87f6f6d09643d2b9c"
+    },
+    "name": "graph-architect-toolkit-cycle",
+    "mode": "A",
+    "entry": "spec_edit",
+    "target": {
+      "root": "C:/Users/KHS/.claude/skills/graph-architect",
+      "note": "이 그래프는 <툴킷 자신>을 고치는 1회분이다 — 자기 서술(self-describing) 픽스처"
+    },
+    "task": {
+      "request": "graph-architect 툴킷의 명세·검증기·컴파일러·렌더러를 고치고, 훅을 설치한 뒤 소유자 승인을 받는다"
+    },
+    "verdict": {
+      "유형": "파이프라인·에이전트 — 도구 자신을 고친다",
+      "규모": "파일 4~15 (tools/ 6개 + SKILL.md + references/)",
+      "리스크": "훅 설치가 비가역이다 — 사용자 환경 전역에 영향",
+      "검증가능성": "자동 가능 — 검증기·컴파일러·렌더러가 전부 결정론 출력을 낸다",
+      "기존자산": "test.mjs 회귀 스위트 · run.selftest.mjs"
+    },
+    "scope": {
+      "unit": "툴킷 수정 1회분",
+      "not_covered": [
+        "다른 스킬",
+        "사용자 프로젝트의 그래프",
+        "MCP 서버 설정"
+      ]
+    },
+    "excluded": [
+      {
+        "node": "pm-lead 병렬 조사 3종",
+        "reason": "내부 도구다 — 시장·경쟁 근거가 필요 없다"
+      },
+      {
+        "node": "security-architect",
+        "reason": "네트워크·인증·사용자 입력이 없다. 전부 로컬 순수 함수"
+      },
+      {
+        "node": "webapp-testing / browse",
+        "reason": "웹 UI 없음"
+      },
+      {
+        "node": "수동 브라우저 체크리스트",
+        "reason": "브라우저 전용 API·장치·감각 출력 없음"
+      }
+    ],
+    "guarantees": {
+      "provides": [
+        "G0 — IR 필수 필드 커버리지가 100% 다",
+        "G4c — 정적 검사 6종이 전부 통과한다",
+        "G_COMPILE — 같은 입력을 3회 컴파일하면 결과가 1종이다 (결정론)",
+        "G_RENDER — 렌더러가 낸 문서가 스키마에 맞다"
+      ],
+      "excludes": [
+        "이 그래프는 <툴킷 회귀 픽스처>다 — 실제 프로젝트의 임계값이 아니다",
+        "컴파일된 스크립트가 <실제로 원하는 일을 하는지>는 재지 않는다. 구문·무손실만 잰다",
+        "성능·토큰 비용은 재지 않는다"
+      ]
+    },
+    "host": {
+      "pipeline": "workflow-script",
+      "reason": "팬아웃 2갈래 + 되돌아가는 엣지가 있어 결정론 제어가 필요하다 — 컴파일 대상이다",
+      "state_file": "example.state.json",
+      "enforced_by_hook": [
+        "G4c"
+      ]
+    }
+  },
+  "project": {
+    "fingerprint": {
+      "stack": [
+        "node",
+        "esm",
+        "markdown"
+      ],
+      "scale": {
+        "files": "1-29",
+        "modules": "1-2"
+      },
+      "markers": [
+        "의존성 0 · 네트워크 0 · 순수 함수",
+        "툴킷 회귀 픽스처 — 어느 사용자 프로젝트도 아니다"
+      ],
+      "hash": "sha256:895fac6c5f225e0c77886b2044bf83b5556bacea3311e2f042918633e437ec28"
+    }
+  },
+  "state": [
+    {
+      "field": "ir_field_coverage",
+      "type": "int",
+      "unit": "percent"
+    },
+    {
+      "field": "static_checks",
+      "type": "int",
+      "unit": "count"
+    },
+    {
+      "field": "compile_hashes",
+      "type": "int",
+      "unit": "count"
+    },
+    {
+      "field": "ir_schema_valid",
+      "type": "int",
+      "unit": "count"
+    },
+    {
+      "field": "archive_cases",
+      "type": "int",
+      "unit": "count"
+    },
+    {
+      "field": "spec_path",
+      "type": "ref",
+      "unit": "none"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "spec_edit",
+      "kind": "work",
+      "runner": "agent",
+      "uses": [
+        "plan-eng-review"
+      ],
+      "rationale": "명세(SKILL.md·IR 스키마)를 먼저 고친다 — 게이트가 미달일 때 원인이 대개 여기다",
+      "produces": [
+        "SKILL.md",
+        "state:spec_path"
+      ],
+      "retry": {
+        "max": 2,
+        "on_exhaust": "halt"
+      },
+      "policy": {
+        "allowed_tools": [
+          "Read",
+          "Write",
+          "Edit"
+        ],
+        "requires_approval": false,
+        "reversible": true,
+        "budget": {
+          "tokens": 120000,
+          "iterations": 3,
+          "wall_clock_s": 900
+        }
+      }
+    },
+    {
+      "id": "validate",
+      "kind": "work",
+      "runner": "script",
+      "uses": [],
+      "rationale": "IR 필수 필드가 다 있는지 먼저 본다 — 없으면 뒤 검사가 전부 무의미하다",
+      "produces": [
+        "state:ir_field_coverage"
+      ],
+      "retry": {
+        "max": 2,
+        "on_exhaust": "halt"
+      },
+      "policy": {
+        "allowed_tools": [
+          "Bash"
+        ],
+        "requires_approval": false,
+        "reversible": true,
+        "budget": {
+          "tokens": 20000,
+          "iterations": 3,
+          "wall_clock_s": 300
+        }
+      }
+    },
+    {
+      "id": "static_check",
+      "kind": "work",
+      "runner": "script",
+      "uses": [],
+      "rationale": "정적 검사 6종 — 서술형 게이트·상태 밖 참조·비가역 무단실행·도달불가·무한루프·엣지 깨짐",
+      "produces": [
+        "state:static_checks"
+      ],
+      "retry": {
+        "max": 2,
+        "on_exhaust": "halt"
+      },
+      "policy": {
+        "allowed_tools": [
+          "Bash"
+        ],
+        "requires_approval": false,
+        "reversible": true,
+        "budget": {
+          "tokens": 20000,
+          "iterations": 3,
+          "wall_clock_s": 300
+        }
+      }
+    },
+    {
+      "id": "backend",
+      "kind": "work",
+      "runner": "agent",
+      "uses": [
+        "review",
+        "codex"
+      ],
+      "rationale": "검증기·컴파일러 쪽 — 렌더러와 파일이 겹치지 않아 병렬 안전",
+      "produces": [
+        "tools/validate.mjs",
+        "tools/compile.mjs"
+      ],
+      "retry": {
+        "max": 2,
+        "on_exhaust": "fail"
+      },
+      "policy": {
+        "allowed_tools": [
+          "Read",
+          "Write",
+          "Edit",
+          "Bash"
+        ],
+        "requires_approval": false,
+        "reversible": true,
+        "budget": {
+          "tokens": 250000,
+          "iterations": 4,
+          "wall_clock_s": 1800
+        }
+      }
+    },
+    {
+      "id": "frontend",
+      "kind": "work",
+      "runner": "agent",
+      "uses": [
+        "review"
+      ],
+      "rationale": "렌더러 쪽 — 검증기와 파일이 겹치지 않아 병렬 안전",
+      "produces": [
+        "tools/render.mjs"
+      ],
+      "retry": {
+        "max": 2,
+        "on_exhaust": "fail"
+      },
+      "policy": {
+        "allowed_tools": [
+          "Read",
+          "Write",
+          "Edit",
+          "Bash"
+        ],
+        "requires_approval": false,
+        "reversible": true,
+        "budget": {
+          "tokens": 250000,
+          "iterations": 4,
+          "wall_clock_s": 1800
+        }
+      }
+    },
+    {
+      "id": "compile_check",
+      "kind": "work",
+      "runner": "script",
+      "uses": [],
+      "rationale": "같은 입력을 3회 컴파일해 결과가 1종인지 본다 — 결정론이 깨지면 그래프를 신뢰할 수 없다",
+      "produces": [
+        "state:compile_hashes"
+      ],
+      "retry": {
+        "max": 2,
+        "on_exhaust": "fail"
+      },
+      "policy": {
+        "allowed_tools": [
+          "Bash"
+        ],
+        "requires_approval": false,
+        "reversible": true,
+        "budget": {
+          "tokens": 30000,
+          "iterations": 3,
+          "wall_clock_s": 600
+        }
+      }
+    },
+    {
+      "id": "render_check",
+      "kind": "work",
+      "runner": "script",
+      "uses": [],
+      "rationale": "렌더러 산출이 스키마에 맞는지 본다 — graph.md 는 손으로 쓰지 않으므로 여기가 유일한 관문이다",
+      "produces": [
+        "state:ir_schema_valid"
+      ],
+      "retry": {
+        "max": 2,
+        "on_exhaust": "fail"
+      },
+      "policy": {
+        "allowed_tools": [
+          "Bash"
+        ],
+        "requires_approval": false,
+        "reversible": true,
+        "budget": {
+          "tokens": 30000,
+          "iterations": 3,
+          "wall_clock_s": 600
+        }
+      }
+    },
+    {
+      "id": "install_hooks",
+      "kind": "work",
+      "runner": "hook",
+      "uses": [],
+      "rationale": "🔴 게이트를 기계로 강제하려면 훅을 건다 — 사용자 환경 전역에 남으므로 비가역이고 승인이 필요하다",
+      "produces": [
+        ".claude/settings.json"
+      ],
+      "retry": {
+        "max": 1,
+        "on_exhaust": "halt"
+      },
+      "policy": {
+        "allowed_tools": [
+          "Read",
+          "Write"
+        ],
+        "requires_approval": true,
+        "reversible": false,
+        "budget": {
+          "tokens": 40000,
+          "iterations": 2,
+          "wall_clock_s": 600
+        }
+      }
+    },
+    {
+      "id": "human_go",
+      "kind": "human",
+      "runner": "manual",
+      "uses": [],
+      "rationale": "그래프의 출구를 사람이 받는다 — 훅이 전역에 걸리므로 소유자 승인이 마지막 관문이다 (승인 게이트는 test.mjs 가 붙인다)",
+      "produces": [],
+      "retry": {
+        "max": 0,
+        "on_exhaust": "halt"
+      },
+      "policy": {
+        "allowed_tools": [],
+        "requires_approval": true,
+        "reversible": true,
+        "budget": {
+          "tokens": 10000,
+          "iterations": 1,
+          "wall_clock_s": 86400
+        }
+      }
+    },
+    {
+      "id": "archive",
+      "kind": "work",
+      "runner": "script",
+      "uses": [],
+      "rationale": "종단 — 승인된 세대를 사례로 남긴다. 다음 실행의 어긋남 기준선이 여기서 나온다",
+      "produces": [
+        "state:archive_cases"
+      ],
+      "retry": {
+        "max": 1,
+        "on_exhaust": "halt"
+      },
+      "policy": {
+        "allowed_tools": [
+          "Read",
+          "Write",
+          "Bash"
+        ],
+        "requires_approval": false,
+        "reversible": true,
+        "budget": {
+          "tokens": 20000,
+          "iterations": 1,
+          "wall_clock_s": 300
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "spec_edit",
+      "to": "validate",
+      "when": "always"
+    },
+    {
+      "from": "validate",
+      "to": "static_check",
+      "when": "gate:G0:pass"
+    },
+    {
+      "from": "validate",
+      "to": "spec_edit",
+      "when": "gate:G0:fail"
+    },
+    {
+      "from": "static_check",
+      "to": "backend",
+      "when": "gate:G4c:pass"
+    },
+    {
+      "from": "static_check",
+      "to": "frontend",
+      "when": "gate:G4c:pass"
+    },
+    {
+      "from": "static_check",
+      "to": "spec_edit",
+      "when": "gate:G4c:fail"
+    },
+    {
+      "from": "backend",
+      "to": "compile_check",
+      "when": "always"
+    },
+    {
+      "from": "frontend",
+      "to": "render_check",
+      "when": "always"
+    },
+    {
+      "from": "compile_check",
+      "to": "install_hooks",
+      "when": "gate:G_COMPILE:pass"
+    },
+    {
+      "from": "compile_check",
+      "to": "backend",
+      "when": "gate:G_COMPILE:fail"
+    },
+    {
+      "from": "render_check",
+      "to": "install_hooks",
+      "when": "gate:G_RENDER:pass"
+    },
+    {
+      "from": "render_check",
+      "to": "frontend",
+      "when": "gate:G_RENDER:fail"
+    },
+    {
+      "from": "install_hooks",
+      "to": "human_go",
+      "when": "always"
+    },
+    {
+      "from": "human_go",
+      "to": "archive",
+      "when": "always"
+    }
+  ],
+  "gates": [
+    {
+      "id": "G0",
+      "field": "ir_field_coverage",
+      "op": "==",
+      "threshold": 100,
+      "on_fail": {
+        "goto": "spec_edit",
+        "max_retry": 2
+      },
+      "ground_truth": "measured",
+      "threshold_source": "validate.mjs 가 세는 G0 필수 11필드. 하나라도 비면 뒤 검사가 무의미하다"
+    },
+    {
+      "id": "G4c",
+      "field": "static_checks",
+      "op": "==",
+      "threshold": 6,
+      "on_fail": {
+        "goto": "spec_edit",
+        "max_retry": 2
+      },
+      "ground_truth": "measured",
+      "threshold_source": "validate.mjs 의 정적 검사 6종. 부분 통과를 허용하지 않는다"
+    },
+    {
+      "id": "G_COMPILE",
+      "field": "compile_hashes",
+      "op": "==",
+      "threshold": 1,
+      "on_fail": {
+        "goto": "backend",
+        "max_retry": 2
+      },
+      "ground_truth": "measured",
+      "threshold_source": "같은 입력 3회 컴파일의 distinct 해시 수. 1 이 아니면 결정론이 깨진 것이다"
+    },
+    {
+      "id": "G_RENDER",
+      "field": "ir_schema_valid",
+      "op": ">=",
+      "threshold": 1,
+      "on_fail": {
+        "goto": "frontend",
+        "max_retry": 2
+      },
+      "ground_truth": "measured",
+      "threshold_source": "렌더 산출을 스키마로 되읽어 통과한 문서 수. graph.md 는 손으로 쓰지 않는다"
+    }
+  ]
+}

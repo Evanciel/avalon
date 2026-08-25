@@ -1,0 +1,3 @@
+# G0b 오라클은 sha256 바이트 비교다 — 체크아웃 시 CRLF 변환이 일어나면
+# fresh clone 에서 markdown_synced 가 깨진다. 전 텍스트 파일 LF 고정.
+* text=auto eol=lf
