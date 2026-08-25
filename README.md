@@ -65,6 +65,17 @@ node tools/run.mjs graph.json measure <field> <value>
 node tools/run.mjs graph.json done <node>     # the tool decides pass/fail, not you
 ```
 
+### One-shot: run it as a skill
+
+The commands above are the manual path. This repo is also a Claude Code skill ([SKILL.md](SKILL.md) is the entry point), and that's the intended way to use it — you state the goal, the agent does the rest:
+
+1. Runs `scaffold` against the target repo to measure it.
+2. Splits the work into nodes and writes the gates. This is the judgment step — the agent drafts it, and the validator holds veto power over the result.
+3. Gets the four numbers green: stamp, validate, compile.
+4. Executes: the compiled workflow assigns a sub-agent per node, and every hand-off between nodes goes through a numeric gate. (Or the agent drives the runner CLI and records measurements as it works.)
+
+It drives itself to completion, with two exceptions that are the whole point: irreversible steps stop and wait for human approval, and a gate it gave up on stays in `abandoned[]` — the agent can't quietly decide "close enough".
+
 ### What a gate looks like
 
 A gate is one JSON object. There is no free-text field, so there is nothing to interpret generously:
