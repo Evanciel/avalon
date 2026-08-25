@@ -1,15 +1,47 @@
 {
   "name": "avalon-skill",
   "version": "1.4.0",
-  "private": true,
   "description": "Declare work as a graph, judge it with numeric gates, execute via lossless compile — an LLM-free toolchain for agent harnesses",
   "type": "module",
   "scripts": {
-    "test": "node tools/test.mjs && node tools/run.selftest.mjs && node tools/install.selftest.mjs"
+    "test": "node tools/test.mjs && node tools/run.selftest.mjs && node tools/install.selftest.mjs",
+    "prepublishOnly": "npm test"
   },
   "engines": {
     "node": ">=18"
   },
   "license": "MIT",
-  "author": "Evanciel <eshurei@gmail.com>"
+  "author": "Evanciel <eshurei@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Evanciel/avalon.git"
+  },
+  "homepage": "https://github.com/Evanciel/avalon#readme",
+  "bugs": {
+    "url": "https://github.com/Evanciel/avalon/issues"
+  },
+  "keywords": [
+    "ai-agent",
+    "claude-code",
+    "skill",
+    "workflow",
+    "graph",
+    "gates",
+    "verification",
+    "harness",
+    "autonomous-loops",
+    "llm-free",
+    "deterministic"
+  ],
+  "files": [
+    "tools/",
+    "SKILL.md",
+    "SKILL.ko.md",
+    "README.md",
+    "README.ko.md",
+    "README.ja.md",
+    "README.zh.md",
+    "graph.json",
+    "graph.md"
+  ]
 }

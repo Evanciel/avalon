@@ -5,7 +5,7 @@
 **面向 AI 智能体的图工程 — 一套完整的执行框架，和骗不了自己的循环。**<br/>
 在开工之前就把通过条件钉成数字，裁决交给工具，而不是 AI 自己。
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-158%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![npm](https://img.shields.io/npm/v/avalon-skill?color=cb3837&logo=npm)](https://www.npmjs.com/package/avalon-skill) [![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-158%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · **简体中文**
 
@@ -96,6 +96,8 @@ Avalon 的架构是四个阶段,这个仓库里的工具就是它们的实现:
 git clone https://github.com/Evanciel/avalon && cd avalon
 npm test        # 158 个测试,零依赖,Node 18+
 ```
+
+只要工具链的话也可以从 npm 获取 — `npm i avalon-skill`。技能本身仍按上文克隆到 `~/.claude/skills` 安装。
 
 要作为 **Claude Code 技能**使用,克隆到技能目录即可 — [SKILL.md](SKILL.md) 的 frontmatter(`name: avalon`)负责注册:
 

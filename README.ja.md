@@ -5,7 +5,7 @@
 **AIエージェントのためのグラフエンジニアリング — 完全なハーネスと、自分を騙せないループ。**<br/>
 作業を始める前に合格条件を数字で固定し、判定はAIではなくツールが下します。
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-158%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![npm](https://img.shields.io/npm/v/avalon-skill?color=cb3837&logo=npm)](https://www.npmjs.com/package/avalon-skill) [![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-158%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · [한국어](README.ko.md) · **日本語** · [简体中文](README.zh.md)
 
@@ -96,6 +96,8 @@ Avalonは4つのステージとして設計されており、このリポジト�
 git clone https://github.com/Evanciel/avalon && cd avalon
 npm test        # テスト158件、依存関係0、Node 18+
 ```
+
+ツールチェーンだけ欲しい場合はnpmでも入手できます — `npm i avalon-skill`。スキル自体は上記の通り `~/.claude/skills` へのクローンでインストールします。
 
 **Claude Codeのスキル**として使うには、スキルディレクトリにクローンするだけです — [SKILL.md](SKILL.md)のfrontmatter(`name: avalon`)が登録を担います:
 

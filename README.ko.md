@@ -5,7 +5,7 @@
 **AI 에이전트를 위한 그래프 엔지니어링 — 완전한 하네스, 그리고 스스로를 속이지 못하는 루프.**<br/>
 일을 시작하기 전에 통과 조건을 숫자로 못 박고, 판정은 AI가 아니라 도구가 내립니다.
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-158%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![npm](https://img.shields.io/npm/v/avalon-skill?color=cb3837&logo=npm)](https://www.npmjs.com/package/avalon-skill) [![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-158%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · **한국어** · [日本語](README.ja.md) · [简体中文](README.zh.md)
 
@@ -96,6 +96,8 @@ Avalon은 순서를 뒤집습니다. 일을 시작하기 **전에** 계획을 �
 git clone https://github.com/Evanciel/avalon && cd avalon
 npm test        # 테스트 158건, 의존성 0개, Node 18+
 ```
+
+도구 체인만 필요하면 npm 으로도 받을 수 있습니다 — `npm i avalon-skill`. 스킬 자체는 위처럼 `~/.claude/skills` 에 클론해서 설치합니다.
 
 **Claude Code 스킬**로 쓰려면 스킬 디렉터리에 클론하면 됩니다 — [SKILL.md](SKILL.md)의 frontmatter(`name: avalon`)가 등록을 담당합니다:
 
