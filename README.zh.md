@@ -5,7 +5,7 @@
 **面向 AI 智能体的图工程 — 一套完整的执行框架，和骗不了自己的循环。**<br/>
 在开工之前就把通过条件钉成数字，裁决交给工具，而不是 AI 自己。
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-139%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-158%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · **简体中文**
 
@@ -94,7 +94,7 @@ Avalon 的架构是四个阶段,这个仓库里的工具就是它们的实现:
 
 ```bash
 git clone https://github.com/Evanciel/avalon && cd avalon
-npm test        # 139 个测试,零依赖,Node 18+
+npm test        # 158 个测试,零依赖,Node 18+
 ```
 
 要作为 **Claude Code 技能**使用,克隆到技能目录即可 — [SKILL.md](SKILL.md) 的 frontmatter(`name: avalon`)负责注册:
@@ -140,6 +140,7 @@ node tools/run.mjs graph.json status          # 全景,包括还没跑过的门
 node tools/run.mjs graph.json start <节点>    # 不在前沿集就拒绝
 node tools/run.mjs graph.json measure <字段> <值> [备注]
 node tools/run.mjs graph.json done <节点>     # 通过与否由工具决定,不由你
+node tools/run.mjs graph.json verify          # 台账哈希链校验(篡改/截断)
 node tools/run.mjs graph.json abort           # 取消进行中的节点
 node tools/run.mjs graph.json lint            # OR 陷阱检查(一个节点两个以上的门)
 ```
@@ -154,7 +155,9 @@ node tools/run.mjs graph.json lint            # OR 陷阱检查(一个节点两�
 | `init` 之后改图继续跑 | 标记 **STALE** — 状态记得自己是从哪个图哈希生出来的 |
 | 门失败次数超过 `max_retry` | **停机** — 运行停止,决定权交还给人 |
 
-每条被接受的测量都追加到台账。台账永不改写,`init --force` 也只丢弃状态、保留台账。
+每条被接受的测量都追加到台账。台账永不改写,`init --force` 也只丢弃状态、保留台账。而且台账会自卫:每一行都与前一行**哈希链**相连(`h`/`prev`),状态文件锚定链头 — 修改、删除、重排过去的任何一行,都会让所有命令拒绝执行,直到有人来查看。
+
+工具消息默认英文,韩语系统区域(或 `AVALON_LANG=ko`)会切换成韩文 — 中文暂未提供。构建产物永远是英文:它们的字节参与哈希,不能依赖环境。
 
 ## 实际用起来什么样
 
@@ -225,7 +228,7 @@ Avalon 不取代你的 AI 智能体 — 它插在智能体的"完成了"和你�
 
 ## 教程:真刀真枪跑一遍
 
-下面的一切都真实发生过 — 命令和输出取自一次实况会话,连失误都包括在内。(工具消息目前是韩语,附有译文。)
+下面的一切都真实发生过 — 命令和输出取自一次实况会话,连失误都包括在内。(这些输出捕获时工具消息还是韩语 — 现在工具默认英文,`AVALON_LANG=ko` 可切回韩文;译文随附。)
 
 假设你有个小 Node 项目 `my-api`,想让智能体加一个搜索端点并让测试通过。
 
@@ -408,11 +411,45 @@ $ node tools/install-hooks.mjs graph.json build/hooks.json
 
 前沿集纪律、测量台账、门裁决、STALE 检测、停机交人。在[三种运行方式](#三种运行方式)里讲过了;文件开头的四条不变式就是契约,自检的存在就是为了证明每一条真的会咬人。
 
+台账是一条**哈希链**:每一行都携带 `h = sha256(canonical(line))` 和前一行的 `h`,状态文件锚定链头。下面是一条已记录的测量在事后被从 7 改成 1 时真实发生的事 — 所有命令都拒绝,不只是 `verify`:
+
+```text
+$ node tools/run.mjs graph.json next
+🔴 ledger chain broken — refusing every command:
+  line 3: h mismatch — the line was edited
+  the ledger is the evidence layer; a run on tampered evidence proves nothing.
+  → inspect the ledger, archive it elsewhere, remove it, then re-init
+```
+
+(译:台账链断裂 — 拒绝所有命令:第 3 行 h 不匹配,该行被改过;台账是证据层,在被篡改的证据上运行什么也证明不了 → 检查台账、异地归档、删除后重新 init。)
+
+一条写在链所在代码处的但书:这条链是"篡改可发现"(tamper-evident),不是"篡改不可能"(tamper-proof)。它抓得住修改、删除、重排、截断;能把台账和状态文件*一起、一致地*重写的人,它抓不住 — 那需要一个外部锚,而这正是留给休眠的④ ARCHIVE 的职责。
+
 ### `install-hooks.mjs` + `hooks-gate.mjs` — 超越会话的强制执行
 
 安装器把 `build/hooks.json` 作为 Stop 钩子接进**项目的** `.claude/settings.json`。重点在它守住的边界:没有 `--yes` 就什么都不写(只打印计划并 exit 3 — 智能体不得在未经用户许可时自行加 `--yes`);全局 `~/.claude` settings 即使加了 `--yes` 也拒绝;哈希对不上当前图的过期规格拒绝;别人的钩子条目原样保留;重复安装幂等。`--uninstall --yes` 随时卸载。
 
 它还会**把获批的内容本身钉死**:审批时刻 `build/hooks.json` 的字节哈希被原样嵌进安装的命令里(`--approved sha256:…`)。此后文件以任何方式变动,门都会在**执行任何一条 check 之前**以 TAMPERED 拦下 — 没有这一层,对一个 JSON 文件的写权限就等于让任意命令在每一轮结束时自动执行的权限。唯一的回路是重新审批(`--yes` 重装)。
+
+它还要求证明每条 check **能变红**。钩子条目可以声明一个 `probe` — 同一个判据对准一份已知损坏的输入,因此它必须以非零退出码结束。安装器在 plan 和 install 时运行全部已声明的探针;一个以 exit 0 结束的探针,恰好当场演示了一条不可能失败的 check,安装即被拒绝:
+
+```text
+$ node tools/install-hooks.mjs graph.json build/hooks.json --yes
+installer refused: probe refuted nothing — these checks cannot fail (or the probe never finished), so they enforce nothing:
+  G1: probe exit 0 ← node -e "process.exit(0)"
+```
+
+(译:安装器拒绝 — 探针什么也没反驳:这些 check 不可能失败(或探针根本没跑完),所以它们什么也强制不了。)
+
+健康的计划会逐门打印反证:
+
+```text
+  probe   G0  exit 1 ✅ (the oracle can fail)
+  probe   G0b  exit 1 ✅ (the oracle can fail)
+  probe   G4c  exit 1 ✅ (the oracle can fail)
+```
+
+没有探针的钩子照常安装(报告为"未证明" — 不搞追溯性破坏);`--status` 随时给出只读诊断:装没装、审批钉是否完好或已 TAMPERED、规格是否 STALE — 一条 check 都不执行。
 
 装好之后,每当会话要结束回合,`hooks-gate.mjs` 就跑一遍所有已声明的 check:全过 → exit 0;有一个不过 → exit 2 拦截结束,并把不合格的门反馈给模型。图变了就报 STALE 并拦截 — 悄悄执行昨天的规则,比停下来更不诚实。
 
@@ -452,26 +489,28 @@ $ node tools/install-hooks.mjs graph.json build/hooks.json
 
 `compile.mjs` 只输出到 `build/hooks.json` 为止 — 每个门的 check 命令 + 退出码契约 — 停在那里是有意的。安装由另一个工具、在另一次审批之下完成:`install-hooks.mjs` 先展示计划,在人确认的 `--yes` 之前什么都不写,只装进项目 settings(永不碰全局),卸载和安装一样容易。自动安装依然被禁止:一个悄悄把自己接进你会话强制层的工具,恰恰是这个项目要防的那种无法问责的魔法。安装之前,规格不拦截任何东西 — 而且完成报告被要求原样写出这句话。
 
+Avalon 自己的三个钩子也全部带探针:每条 check 都同时对准一份已提交的损坏夹具([tools/fixtures/](tools/fixtures/)),必须将其拒绝 — 所以这个仓库的强制层被证明"能变红"。
+
 ## Avalon 跑在 Avalon 上
 
-仓库根目录的 [graph.json](graph.json) 不是示例 — 它是 Avalon 用 Avalon 管理自己开发的那张图。7 个节点(`frontend → validate → render_check → backend → compile_check → human_go → install_hooks`),6 个已声明状态字段,3 个门(G0、G0b、G4c)通过 `host.enforced_by_hook` 机器强制 — 每个都带着真正执行检查的命令。[graph.md](graph.md) 是它的渲染,由 G0b 逐字节验证。
+仓库根目录的 [graph.json](graph.json) 不是示例 — 它是 Avalon 用 Avalon 管理自己开发的那张图。7 个节点(`frontend → validate → render_check → backend → compile_check → human_go → install_hooks`),6 个已声明状态字段,3 个门(G0、G0b、G4c)通过 `host.enforced_by_hook` 机器强制 — 每个都带着真正执行检查的命令,外加一个对准已提交损坏夹具、证明该命令能失败的探针。[graph.md](graph.md) 是它的渲染,由 G0b 逐字节验证。
 
 图的 `guarantees` 块是"诚实的边界"清单的机器化形态:`provides` 写明一次绿色运行到底证明了什么,`excludes` 写明它不证明什么。如果这个仓库自己的门变红,它的 CI 就会失败。
 
 ## 怎么测试的
 
-`npm test` 一条命令跑三个套件,共 139 个:
+`npm test` 一条命令跑三个套件,共 158 个:
 
-- **[test.mjs](tools/test.mjs)(88 个)** — 模式和编译器行为,包括**执行语义**:编译出的工作流产物在打桩的宿主上被真正执行,所以"abandoned 非空时 completed 为 false"这类主张是演示出来的,不是断言出来的。部署同步门把 8 个运行时文件与已安装的技能副本逐字节比对,仓库和部署版无法悄悄漂移。
-- **[run.selftest.mjs](tools/run.selftest.mjs)(36 个)** — 用唯一能证明护栏存在的方法测试运行器的拒绝墙:*删掉护栏,套件必须变红。* 每个测试构造一种被禁止的局面(跳前沿集的 start、没测量的 done、改图继续跑、篡改台账),只有运行器拒绝了才算通过。
-- **[install.selftest.mjs](tools/install.selftest.mjs)(15 个)** — 用同样的方法测安装器的边界:无 `--yes` 不写、拒绝全局、拒绝过期规格、保留他人钩子、幂等重装,以及门在不合格与 STALE 时的拦截(exit 2)。15 个里有 3 个是攻击场景:在审批*之后*篡改 `build/hooks.json` — 把 check 换成恶意命令,甚至连图带规格一致地重新生成 — 只有门**什么都不执行**就拦下时才算通过(用标记文件证明植入的命令从未运行)。
+- **[test.mjs](tools/test.mjs)(93 个)** — 模式和编译器行为,包括**执行语义**:编译出的工作流产物在打桩的宿主上被真正执行,所以"abandoned 非空时 completed 为 false"这类主张是演示出来的,不是断言出来的。新增:**指纹辨别力** — 同一个仓库 scaffold 两次,指纹必须逐字节相同;两个不同的仓库,指纹必须不同 — 用真实的 scaffold 运行实测。在这些测试之前,指纹的辨别力一直是个*未经验证*的主张。部署同步门把 9 个运行时文件与已安装的技能副本逐字节比对,仓库和部署版无法悄悄漂移。
+- **[run.selftest.mjs](tools/run.selftest.mjs)(41 个)** — 用唯一能证明护栏存在的方法测试运行器的拒绝墙:*删掉护栏,套件必须变红。* 每个测试构造一种被禁止的局面(跳前沿集的 start、没测量的 done、改图继续跑),只有运行器拒绝了才算通过。台账链测试攻击的是真实台账 — 改写过去的测量、截断尾部、绕过链追加 — 只有当所有命令都拒绝时才算通过。
+- **[install.selftest.mjs](tools/install.selftest.mjs)(24 个)** — 用同样的方法测安装器的边界:无 `--yes` 不写、拒绝全局、拒绝过期规格、保留他人钩子、幂等重装,以及门在不合格与 STALE 时的拦截(exit 2)。其中 3 个是 TOCTOU 攻击场景:在审批*之后*篡改 `build/hooks.json` — 把 check 换成恶意命令,甚至连图带规格一致地重新生成 — 只有门**什么都不执行**就拦下时才算通过(用标记文件证明植入的命令从未运行)。其余的钉住探针之墙(不可能失败的判据按装饰拒绝)、`--status` 只读不写,以及默认语言确实是英文。
 
 CI 在 ubuntu 和 windows 上跑全部两个套件。换行符通过 [.gitattributes](.gitattributes) 钉死为 LF — 因为 G0b 是逐字节的判据,CRLF 检出严格来说就是另一份文档。
 
 ## 仓库地图
 
 ```
-SKILL.md                 技能入口 — 流程与纪律
+SKILL.md / SKILL.ko.md   技能入口 — 流程与纪律(en / ko)
 graph.json / graph.md    自我应用的图(JSON 为正本,md 是渲染产物)
 tools/
   scaffold.mjs           实测仓库 → 生成绿色骨架
@@ -479,22 +518,25 @@ tools/
   validate.mjs           G0 全量 + 6 项静态检查 + 模式版本管理
   render.mjs             JSON → markdown(--check 为逐字节判据)
   compile.mjs            IR → 工作流脚本 + hooks.json(从不调用 LLM)
-  run.mjs                运行器 — 前沿集、测量台账、门裁决
+  run.mjs                运行器 — 前沿集、哈希链台账、门裁决
+  i18n.mjs               双语消息(默认英文,AVALON_LANG=ko 为韩文)— 产物永远英文
   install-hooks.mjs      带审批门的钩子安装器(仅限项目 settings)
   hooks-gate.mjs         Stop 钩子执行者 — 红灯的门拦截回合结束
-  test.mjs               模式 / 编译器 / 执行语义测试(88 个)
-  run.selftest.mjs       运行器自检 — "删掉护栏会变红吗"(36 个)
-  install.selftest.mjs   安装器/门自检 — 审批·范围·防篡改之墙(15 个)
+  fixtures/              已提交的损坏输入 — 探针的靶子
+  test.mjs               模式 / 编译器 / 执行语义 / 指纹测试(93 个)
+  run.selftest.mjs       运行器自检 — "删掉护栏会变红吗"(41 个)
+  install.selftest.mjs   安装器/门自检 — 审批·探针·防篡改之墙(24 个)
 docs/graph/              设计史、IR 规格、上述伤疤的原始记录
 images/                  本 README 的示意图
 ```
 
 ## 诚实的边界
 
-- 工具只能证明**声明了的判据**。check 命令和它的人类语言标题是否同一个意思,仍然要靠人看。
+- 工具只能证明**声明了的判据**。check 命令和它的人类语言标题是否同一个意思,仍然要靠人看。`probe` 收窄了这道缝 — 它证明判据*能*失败 — 但关不上它;任何确定性工具都关不上。
 - `build/hooks.json` 只是规格。在通过 `install-hooks.mjs --yes`(人工审批的步骤)安装之前,它不会拦截任何东西。
 - 智能体节点在运行时产生的产物,无法在编译期比对。
-- 工具消息目前是韩语。退出码和 JSON 输出与语言无关,但文案还不是。
+- 台账链是"篡改可发现"(tamper-evident),不是"篡改不可能"(tamper-proof):它抓得住修改、删除和截断,但把台账和状态文件一起一致地重写的人能骗过它。能抓住那种人的外部锚是④ ARCHIVE 的职责,而④仍在休眠。
+- 工具消息默认英文(`AVALON_LANG=ko` 切换韩文;中文暂未提供)。代码注释和 [docs/graph/](docs/graph/) 里的设计史仍是韩文 — 推理都有记录,只是还没翻译。
 
 完整的当前清单在自我应用图的 `guarantees` 块里。
 

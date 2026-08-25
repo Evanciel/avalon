@@ -3,12 +3,18 @@
  * 실행: node avalon/tools/test.mjs
  */
 
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, mkdirSync, writeFileSync, mkdtempSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { canonical, sha256, stamp, specHash, fingerprintHash } from './hash.mjs'
 import { validate } from './validate.mjs'
 import { compile, gateLoss, compileHooks, hookLoss } from './compile.mjs'
 import { render } from './render.mjs'
+
+// 이 스위트의 단정은 한국어 메시지에 걸려 있다 — ko 로 고정한다 (도구 기본 언어는 영어).
+process.env.AVALON_LANG = 'ko'
 
 let pass = 0, fail = 0
 const t = (name, fn) => {
@@ -795,6 +801,65 @@ await ta('★ ABANDON(실행): 게이트를 통과하면 completed:true / abando
   eq(r.state_file, '.avalon/runs/mini.jsonl', '완주 반환값의 state_file:')
 })
 
+console.log('\n── 반증 프로브 — 스키마 ──')
+
+t('probe: 빈 문자열 선언은 스키마 위반이다 (빈 반증은 반증이 아니다)', () => {
+  const g = clone()
+  g.graph.host.enforced_by_hook[0].probe = ''
+  ok(validate(g).schemaViolations.some((v) => v.includes('probe')), '빈 probe 가 통과했다')
+})
+
+t('probe: 비어 있지 않은 명령 문자열이면 위반이 아니다', () => {
+  const g = clone()
+  g.graph.host.enforced_by_hook[0].probe = 'node -e "process.exit(1)"'
+  ok(!validate(g).schemaViolations.some((v) => v.includes('probe')), '정상 probe 를 위반으로 잡았다')
+})
+
+console.log('\n── scaffold.mjs — 지문 변별력 ──')
+
+// 지문의 변별력은 지금까지 <미검증> 한계였다: 같은 저장소 → 같은 지문(결정론),
+// 다른 저장소 → 다른 지문(변별). 둘 다 실측으로 고정한다.
+const SCAF = fileURLToPath(new URL('./scaffold.mjs', import.meta.url))
+const FP_BASE = process.env.CLAUDE_SELFTEST_TMP
+  || (existsSync('A:/claude-temp') ? 'A:/claude-temp' : tmpdir())
+const FP_DIR = mkdtempSync(join(FP_BASE, 'fpdisc-'))
+const mkRepo = (name, files) => {
+  const d = join(FP_DIR, name)
+  mkdirSync(d, { recursive: true })
+  for (const [f, body] of Object.entries(files)) writeFileSync(join(d, f), body)
+  return d
+}
+const scaffold = (root, out) => {
+  execFileSync(process.execPath, [SCAF, root, 'fingerprint probe', out], { stdio: 'pipe' })
+  return JSON.parse(readFileSync(out, 'utf8'))
+}
+const REPO_A = mkRepo('node-app', {
+  'package.json': JSON.stringify({ dependencies: { react: '18' }, scripts: { test: 'vitest' } }),
+  'index.js': 'export default 1\n',
+})
+const REPO_B = mkRepo('py-app', { 'requirements.txt': 'flask\n', 'main.py': 'print(1)\n' })
+
+t('결정론: 같은 저장소를 두 번 실측하면 지문이 바이트까지 같다', () => {
+  const g1 = scaffold(REPO_A, join(FP_DIR, 'a1.json'))
+  const g2 = scaffold(REPO_A, join(FP_DIR, 'a2.json'))
+  eq(g1.project.fingerprint.hash, g2.project.fingerprint.hash, '지문 해시가 갈렸다:')
+  eq(g1.graph.spec.hash, g2.graph.spec.hash, 'spec 해시가 갈렸다:')
+})
+
+t('★ 변별력: 다른 저장소는 다른 지문이 나온다 (지문이 0 비트가 아님을 증명)', () => {
+  const ga = scaffold(REPO_A, join(FP_DIR, 'da.json'))
+  const gb = scaffold(REPO_B, join(FP_DIR, 'db.json'))
+  ok(ga.project.fingerprint.hash !== gb.project.fingerprint.hash, '다른 저장소인데 지문이 같다')
+})
+
+t('실측성: 지문 stack 이 실제 파일에서 나온다 (node/react vs python)', () => {
+  const ga = scaffold(REPO_A, join(FP_DIR, 'sa.json'))
+  const gb = scaffold(REPO_B, join(FP_DIR, 'sb.json'))
+  ok(ga.project.fingerprint.stack.includes('node') && ga.project.fingerprint.stack.includes('react'), 'A: node+react 미검출')
+  ok(gb.project.fingerprint.stack.includes('python'), 'B: python 미검출')
+  ok(!gb.project.fingerprint.stack.includes('node'), 'B 에 없는 node 가 잡혔다 — 추측이 섞였다')
+})
+
 console.log('\n── 배포 동기화 ──')
 
 t('avalon/tools 와 skill/tools 가 갈라지지 않았다', () => {
@@ -807,7 +872,7 @@ t('avalon/tools 와 skill/tools 가 갈라지지 않았다', () => {
   if (sha256(DEV) === sha256(RUNTIME + '/')) return  // 자기 자신과 비교하는 경우
   // run.mjs 는 미러에만 있고 정본에 없던 역방향 드리프트가 실제로 있었다 (2026-08-25 발견).
   // 4파일만 검사하던 이 게이트가 못 잡았다 — 이제 러너·스캐폴드까지 전부 잰다.
-  for (const f of ['hash.mjs', 'validate.mjs', 'render.mjs', 'compile.mjs', 'run.mjs', 'scaffold.mjs', 'hooks-gate.mjs', 'install-hooks.mjs']) {
+  for (const f of ['hash.mjs', 'validate.mjs', 'render.mjs', 'compile.mjs', 'run.mjs', 'scaffold.mjs', 'hooks-gate.mjs', 'install-hooks.mjs', 'i18n.mjs']) {
     const a = sha256(readFileSync(DEV + f, 'utf8'))
     const b = sha256(readFileSync(`${RUNTIME}/${f}`, 'utf8'))
     eq(a, b, `${f} 가 두 위치에서 다름 — 재배포 필요:`)

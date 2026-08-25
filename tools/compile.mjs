@@ -453,18 +453,21 @@ export function compileHooks(g) {
   for (const e of entries) {
     const id = typeof e === 'string' ? e : e?.gate
     const check = e && typeof e === 'object' && typeof e.check === 'string' && e.check.trim() ? e.check : null
+    // probe (선택) — check 가 <실패할 줄 아는지> 증명하는 반증 명령. 설치자가 실행해 exit!=0 을 요구한다.
+    const probe = e && typeof e === 'object' && typeof e.probe === 'string' && e.probe.trim() ? e.probe : null
     const x = gateById.get(id)
     if (!x || !check) continue   // 기계 없는 선언은 싣지 않는다 — hookLoss 가 잡는다
-    hooks.push({ gate: x.id, field: x.field, op: x.op, threshold: x.threshold, check, expect_exit: 0 })
+    hooks.push({ gate: x.id, field: x.field, op: x.op, threshold: x.threshold, check, ...(probe ? { probe } : {}), expect_exit: 0 })
   }
   if (!hooks.length) return null
+  // 산출물 문자열은 항상 영어 — 아티팩트 바이트가 환경변수에 좌우되면 해시·박제가 흔들린다.
   return JSON.stringify({
-    generated_by: 'Avalon ② BACKEND — 직접 수정하지 마라. 재생성: node tools/compile.mjs graph.json build/graph.workflow.js',
+    generated_by: 'Avalon (2) BACKEND — do not edit by hand. Regenerate: node tools/compile.mjs graph.json build/graph.workflow.js',
     spec_hash: g.graph.spec.hash,
     hooks,
     install: {
-      by: 'install-hooks.mjs --yes (사용자 승인 필수, 프로젝트 .claude/settings.json 에만) — 자동 설치 금지',
-      contract: '각 check 는 게이트 미달 시 exit != 0 이어야 한다. 훅 호스트가 exit 로 차단한다',
+      by: 'install-hooks.mjs --yes (user approval required, project .claude/settings.json only) — auto-install is forbidden',
+      contract: 'each check must exit != 0 when its gate is unmet; a declared probe must exit != 0 at install time (proves the check can fail). The hook host blocks on exit',
     },
   }, null, 2) + '\n'
 }

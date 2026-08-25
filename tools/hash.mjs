@@ -7,6 +7,7 @@
 
 import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
+import { t } from './i18n.mjs'
 
 /**
  * 이 파일이 직접 실행됐는가.
@@ -21,7 +22,7 @@ export const isMain = (url) => !!process.argv[1] && url === pathToFileURL(proces
  * 같은 의미의 객체는 키 순서와 무관하게 같은 문자열이 된다.
  */
 export function canonical(value) {
-  if (value === undefined) throw new Error('canonical: undefined는 직렬화할 수 없다')
+  if (value === undefined) throw new Error(t('canonical: undefined cannot be serialized', 'canonical: undefined는 직렬화할 수 없다'))
   if (value === null || typeof value !== 'object') return JSON.stringify(value)
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']'
   return (
@@ -43,7 +44,7 @@ export function sha256(str) {
  * hash 자신은 입력에서 제외한다.
  */
 export function fingerprintHash(fp) {
-  if (!fp) throw new Error('fingerprintHash: project.fingerprint 없음')
+  if (!fp) throw new Error(t('fingerprintHash: project.fingerprint missing', 'fingerprintHash: project.fingerprint 없음'))
   const { stack, scale, markers } = fp
   return sha256(canonical({ stack, scale, markers }))
 }

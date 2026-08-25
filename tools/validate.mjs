@@ -8,6 +8,8 @@
  *    avalon-graph.md v4 "게이트 설계에서 제거한 것" 참조.
  */
 
+import { t } from './i18n.mjs'
+
 const VALID_OPS = new Set(['==', '>=', '<=', '>', '<'])
 const VALID_GROUND_TRUTH = new Set(['measured', 'reported', 'human', 'assumed'])
 const VALID_TYPES = new Set(['int', 'ratio', 'bool', 'enum', 'ref', 'text'])
@@ -95,14 +97,14 @@ function checkGateFields(g) {
   const allowed = new Set((g.state ?? []).map((s) => s.field))
   return (g.gates ?? [])
     .filter((gate) => !allowed.has(gate.field))
-    .map((gate) => `게이트 ${gate.id}: state에 없는 필드 '${gate.field}'`)
+    .map((gate) => t(`gate ${gate.id}: field '${gate.field}' not in state`, `게이트 ${gate.id}: state에 없는 필드 '${gate.field}'`))
 }
 
 /** #2 비가역 노드가 승인 없이 실행되는가 (G6) */
 function checkIrreversibleApproval(g) {
   return (g.nodes ?? [])
     .filter((n) => n.policy?.reversible === false && n.policy?.requires_approval !== true)
-    .map((n) => `노드 ${n.id}: reversible=false 인데 requires_approval 아님`)
+    .map((n) => t(`node ${n.id}: reversible=false but requires_approval not set`, `노드 ${n.id}: reversible=false 인데 requires_approval 아님`))
 }
 
 /**
@@ -116,8 +118,8 @@ function checkIrreversibleApproval(g) {
 function checkReachability(g) {
   const ids = (g.nodes ?? []).map((n) => n.id)
   const entry = g.graph?.entry
-  if (!entry) return ['graph.entry 없음 — 진입점을 명시해야 한다']
-  if (!ids.includes(entry)) return [`graph.entry '${entry}': 그런 노드 없음`]
+  if (!entry) return [t('graph.entry missing — the entry point must be explicit', 'graph.entry 없음 — 진입점을 명시해야 한다')]
+  if (!ids.includes(entry)) return [t(`graph.entry '${entry}': no such node`, `graph.entry '${entry}': 그런 노드 없음`)]
   const entries = [entry]
 
   const adj = new Map(ids.map((id) => [id, []]))
@@ -130,7 +132,7 @@ function checkReachability(g) {
       if (!seen.has(nxt)) { seen.add(nxt); stack.push(nxt) }
     }
   }
-  return ids.filter((id) => !seen.has(id)).map((id) => `노드 ${id}: 진입점에서 도달 불가`)
+  return ids.filter((id) => !seen.has(id)).map((id) => t(`node ${id}: not reachable from entry`, `노드 ${id}: 진입점에서 도달 불가`))
 }
 
 /**
@@ -188,17 +190,19 @@ function checkTermination(g) {
   )
   return sccs
     .filter((c) => c.length > 1 || unboundedSelfLoop.has(c[0]))
-    .map((c) =>
+    .map((c) => t(
+      `cycle [${c.join(' → ')}]: no loop bound — no gate:*:fail edge breaks this cycle, ` +
+      `or its gate has no integer on_fail.max_retry. A node's retry.max does not break cycles`,
       `순환 [${c.join(' → ')}]: 루프 상한 없음 — 이 순환을 끊는 gate:*:fail 엣지가 없거나 ` +
       `그 게이트에 on_fail.max_retry 정수가 없다. 노드의 retry.max는 순환을 끊지 못한다`
-    )
+    ))
 }
 
 /** #5 예산 상한 없는 노드가 있는가 (G6) */
 function checkBudget(g) {
   return (g.nodes ?? [])
     .filter((n) => !n.policy?.budget)
-    .map((n) => `노드 ${n.id}: policy.budget 없음`)
+    .map((n) => t(`node ${n.id}: policy.budget missing`, `노드 ${n.id}: policy.budget 없음`))
 }
 
 /** #6 노드·게이트 참조 무결성 — 엣지↔노드, 엣지↔게이트 양방향 */
@@ -209,52 +213,52 @@ function checkEdgeIntegrity(g) {
   const out = []
 
   for (const e of g.edges ?? []) {
-    if (!ids.has(e.from)) out.push(`엣지 ${e.from}→${e.to}: from '${e.from}' 없음`)
-    if (!ids.has(e.to)) out.push(`엣지 ${e.from}→${e.to}: to '${e.to}' 없음`)
+    if (!ids.has(e.from)) out.push(t(`edge ${e.from}→${e.to}: from '${e.from}' missing`, `엣지 ${e.from}→${e.to}: from '${e.from}' 없음`))
+    if (!ids.has(e.to)) out.push(t(`edge ${e.from}→${e.to}: to '${e.to}' missing`, `엣지 ${e.from}→${e.to}: to '${e.to}' 없음`))
     if (!VALID_WHEN.test(e.when ?? '')) {
-      out.push(`엣지 ${e.from}→${e.to}: when '${e.when}' 형식 오류`)
+      out.push(t(`edge ${e.from}→${e.to}: when '${e.when}' malformed`, `엣지 ${e.from}→${e.to}: when '${e.when}' 형식 오류`))
       continue
     }
     // 형식만 보고 통과시키면 gate:G99:pass 같은 유령 참조가 샌다
     const m = /^gate:([A-Za-z0-9_]+):(pass|fail)$/.exec(e.when)
     if (m) {
-      if (!gateIds.has(m[1])) out.push(`엣지 ${e.from}→${e.to}: 게이트 '${m[1]}' 이 gates[]에 없음`)
+      if (!gateIds.has(m[1])) out.push(t(`edge ${e.from}→${e.to}: gate '${m[1]}' not in gates[]`, `엣지 ${e.from}→${e.to}: 게이트 '${m[1]}' 이 gates[]에 없음`))
       else referenced.add(m[1])
     }
   }
 
   // 어떤 엣지도 참조하지 않는 게이트는 판정해도 갈 곳이 없다 = 죽은 게이트
   for (const id of gateIds) {
-    if (!referenced.has(id)) out.push(`게이트 ${id}: 이 게이트를 참조하는 엣지가 없음 — 판정해도 분기가 없다`)
+    if (!referenced.has(id)) out.push(t(`gate ${id}: no edge references this gate — its verdict branches nowhere`, `게이트 ${id}: 이 게이트를 참조하는 엣지가 없음 — 판정해도 분기가 없다`))
   }
 
   // on_fail.goto 만 적고 엣지를 안 그리면 도달가능성 검사에서 엉뚱한 메시지로 터진다
   for (const x of g.gates ?? []) {
     const goto = x.on_fail?.goto
     if (!goto) continue
-    if (!ids.has(goto)) { out.push(`게이트 ${x.id}: on_fail.goto '${goto}' 노드 없음`); continue }
+    if (!ids.has(goto)) { out.push(t(`gate ${x.id}: on_fail.goto '${goto}' node missing`, `게이트 ${x.id}: on_fail.goto '${goto}' 노드 없음`)); continue }
     const hasFailEdge = (g.edges ?? []).some((e) => e.when === `gate:${x.id}:fail` && e.to === goto)
     if (!hasFailEdge) {
-      out.push(`게이트 ${x.id}: on_fail.goto='${goto}' 인데 대응하는 gate:${x.id}:fail 엣지가 없음 — 엣지로도 그려야 한다`)
+      out.push(t(`gate ${x.id}: on_fail.goto='${goto}' but no matching gate:${x.id}:fail edge — it must also be drawn as an edge`, `게이트 ${x.id}: on_fail.goto='${goto}' 인데 대응하는 gate:${x.id}:fail 엣지가 없음 — 엣지로도 그려야 한다`))
     }
   }
   return out
 }
 
 export const CHECKS = [
-  ['게이트 필드 유효성', checkGateFields],
-  ['비가역 노드 승인', checkIrreversibleApproval],
-  ['도달 가능성', checkReachability],
-  ['종료 가능성', checkTermination],
-  ['예산 누락', checkBudget],
-  ['엣지 참조 무결성', checkEdgeIntegrity],
+  [t('gate field validity', '게이트 필드 유효성'), checkGateFields],
+  [t('irreversible node approval', '비가역 노드 승인'), checkIrreversibleApproval],
+  [t('reachability', '도달 가능성'), checkReachability],
+  [t('termination', '종료 가능성'), checkTermination],
+  [t('missing budget', '예산 누락'), checkBudget],
+  [t('edge reference integrity', '엣지 참조 무결성'), checkEdgeIntegrity],
 ]
 
 /** 서술형 게이트 차단 — threshold가 수치 리터럴이 아니면 스키마 위반 */
 function checkNumericGates(g) {
   return (g.gates ?? [])
     .filter((x) => typeof x.threshold !== 'number' || !VALID_OPS.has(x.op))
-    .map((x) => `게이트 ${x.id}: 서술형 게이트 금지 (op/threshold가 수치 3튜플이어야 함)`)
+    .map((x) => t(`gate ${x.id}: descriptive gates forbidden (op/threshold must be a numeric 3-tuple)`, `게이트 ${x.id}: 서술형 게이트 금지 (op/threshold가 수치 3튜플이어야 함)`))
 }
 
 export function validate(graph) {
@@ -279,46 +283,52 @@ export function validate(graph) {
 
   // 스키마 레벨 위반 (검사 6종과 별개 — 통과 시 조용함)
   const schemaViolations = [
-    ...(schema ? [] : [`graph.spec.version '${declared ?? '(없음)'}' — 미지원 스키마 버전 (아는 것: ${Object.keys(SCHEMAS).sort().join(', ')})`]),
+    ...(schema ? [] : [t(`graph.spec.version '${declared ?? '(none)'}' — unsupported schema version (known: ${Object.keys(SCHEMAS).sort().join(', ')})`, `graph.spec.version '${declared ?? '(없음)'}' — 미지원 스키마 버전 (아는 것: ${Object.keys(SCHEMAS).sort().join(', ')})`)]),
     ...checkNumericGates(graph),
     ...(graph.nodes ?? [])
       .filter((n) => !kinds.has(n.kind))
-      .map((n) => `노드 ${n.id}: kind '${n.kind}' 무효 (v${schema?.key ?? '?'} 어휘: ${[...kinds].sort().join('|') || '판정불가'})`),
+      .map((n) => t(`node ${n.id}: kind '${n.kind}' invalid (v${schema?.key ?? '?'} vocabulary: ${[...kinds].sort().join('|') || 'undecidable'})`, `노드 ${n.id}: kind '${n.kind}' 무효 (v${schema?.key ?? '?'} 어휘: ${[...kinds].sort().join('|') || '판정불가'})`)),
     ...(graph.gates ?? [])
       .filter((x) => x.ground_truth !== undefined && !groundTruth.has(x.ground_truth))
-      .map((x) => `게이트 ${x.id}: ground_truth '${x.ground_truth}' 무효 (v${schema?.key ?? '?'} 어휘: ${[...groundTruth].sort().join('|')})`),
+      .map((x) => t(`gate ${x.id}: ground_truth '${x.ground_truth}' invalid (v${schema?.key ?? '?'} vocabulary: ${[...groundTruth].sort().join('|')})`, `게이트 ${x.id}: ground_truth '${x.ground_truth}' 무효 (v${schema?.key ?? '?'} 어휘: ${[...groundTruth].sort().join('|')})`)),
     ...(graph.nodes ?? [])
       .filter((n) => n.runner !== undefined && !runners.has(n.runner))
-      .map((n) => `노드 ${n.id}: runner '${n.runner}' 무효 (v${schema?.key ?? '?'} 어휘: ${[...runners].sort().join('|') || '판정불가'})`),
+      .map((n) => t(`node ${n.id}: runner '${n.runner}' invalid (v${schema?.key ?? '?'} vocabulary: ${[...runners].sort().join('|') || 'undecidable'})`, `노드 ${n.id}: runner '${n.runner}' 무효 (v${schema?.key ?? '?'} 어휘: ${[...runners].sort().join('|') || '판정불가'})`)),
     ...(graph.state ?? [])
       .filter((s) => s.type !== undefined && !VALID_TYPES.has(s.type))
-      .map((s) => `state ${s.field}: type '${s.type}' 무효 (int|ratio|bool|enum|ref|text)`),
+      .map((s) => t(`state ${s.field}: type '${s.type}' invalid (int|ratio|bool|enum|ref|text)`, `state ${s.field}: type '${s.type}' 무효 (int|ratio|bool|enum|ref|text)`)),
     ...(graph.state ?? [])
       .filter((s) => s.unit !== undefined && !VALID_UNITS.has(s.unit))
-      .map((s) => `state ${s.field}: unit '${s.unit}' 무효 (count|percent|ratio|ms|usd|none)`),
+      .map((s) => t(`state ${s.field}: unit '${s.unit}' invalid (count|percent|ratio|ms|usd|none)`, `state ${s.field}: unit '${s.unit}' 무효 (count|percent|ratio|ms|usd|none)`)),
     ...hookEntries
       .filter((e) => !e.id)
-      .map(() => `host.enforced_by_hook: gate id 없는 항목 — { "gate": "<id>", "check": "<명령>" } 형태여야 한다`),
+      .map(() => t(`host.enforced_by_hook: entry without gate id — must be of the form { "gate": "<id>", "check": "<command>" }`, `host.enforced_by_hook: gate id 없는 항목 — { "gate": "<id>", "check": "<명령>" } 형태여야 한다`)),
     ...hookEntries
       .filter((e) => e.id && !hookGateIds.has(e.id))
-      .map((e) => `host.enforced_by_hook '${e.id}': gates[] 에 없음 — 존재하지 않는 게이트는 강제할 수 없다`),
+      .map((e) => t(`host.enforced_by_hook '${e.id}': not in gates[] — a gate that does not exist cannot be enforced`, `host.enforced_by_hook '${e.id}': gates[] 에 없음 — 존재하지 않는 게이트는 강제할 수 없다`)),
+    // probe 는 선택이지만, 선언했으면 비어 있지 않은 문자열이어야 한다 — 빈 반증은 반증이 아니다.
+    ...(graph.graph?.host?.enforced_by_hook ?? [])
+      .filter((e) => e && typeof e === 'object' && e.probe !== undefined && (typeof e.probe !== 'string' || !e.probe.trim()))
+      .map((e) => t(`host.enforced_by_hook '${e?.gate ?? '?'}': probe must be a non-empty command string — a command that proves check can fail via exit != 0`, `host.enforced_by_hook '${e?.gate ?? '?'}': probe 는 비어 있지 않은 명령 문자열이어야 한다 — exit != 0 로 check 의 실패 가능성을 증명하는 명령`)),
   ]
 
   // 단위 혼동 — ratio 는 항상 0~1. threshold 95 는 퍼센트를 ratio로 쓴 것이다.
   const typeOf = new Map((graph.state ?? []).map((s) => [s.field, s.type]))
   for (const x of graph.gates ?? []) {
     if (typeOf.get(x.field) === 'ratio' && typeof x.threshold === 'number' && x.threshold > 1) {
-      schemaViolations.push(
+      schemaViolations.push(t(
+        `gate ${x.id}: '${x.field}' is ratio(0~1) but threshold ${x.threshold} — for percent use type:int + unit:percent`,
         `게이트 ${x.id}: '${x.field}' 은 ratio(0~1)인데 threshold ${x.threshold} — 퍼센트를 쓰려면 type:int + unit:percent`
-      )
+      ))
     }
     if (typeOf.has(x.field) && !GATEABLE_TYPES.has(typeOf.get(x.field))) {
-      schemaViolations.push(
+      schemaViolations.push(t(
+        `gate ${x.id}: type '${typeOf.get(x.field)}' of '${x.field}' is not gateable — derive a counter instead`,
         `게이트 ${x.id}: '${x.field}' 의 type '${typeOf.get(x.field)}' 은 판정 불가 — 카운터로 파생시켜라`
-      )
+      ))
     }
     if (typeof x.threshold === 'boolean') {
-      schemaViolations.push(`게이트 ${x.id}: threshold 가 boolean — bool 은 0/1 정수로 인코딩한다`)
+      schemaViolations.push(t(`gate ${x.id}: threshold is boolean — encode bool as 0/1 integer`, `게이트 ${x.id}: threshold 가 boolean — bool 은 0/1 정수로 인코딩한다`))
     }
   }
 
@@ -392,38 +402,42 @@ if (isMain(import.meta.url)) {
   if (!file) { console.error('usage: node validate.mjs <graph.json>'); process.exit(2) }
   const r = validate(JSON.parse(readFileSync(file, 'utf8')))
 
-  console.log(`── 스키마 ──`)
-  console.log(`  선언 v${r.schema.declared ?? '(없음)'} → 적용 v${r.schema.applied ?? '(미지원)'}` +
-              `   ${r.schema.runnable ? '실행 가능' : '검증 전용 — 컴파일 거부 (target·task 슬롯 없음)'}`)
-  console.log('── 정적 검사 6종 (G4c) ──')
+  console.log(t('── schema ──', '── 스키마 ──'))
+  console.log(t(
+    `  declared v${r.schema.declared ?? '(none)'} → applied v${r.schema.applied ?? '(unsupported)'}` +
+    `   ${r.schema.runnable ? 'runnable' : 'validation only — compile refused (no target·task slots)'}`,
+    `  선언 v${r.schema.declared ?? '(없음)'} → 적용 v${r.schema.applied ?? '(미지원)'}` +
+    `   ${r.schema.runnable ? '실행 가능' : '검증 전용 — 컴파일 거부 (target·task 슬롯 없음)'}`
+  ))
+  console.log(t('── 6 static checks (G4c) ──', '── 정적 검사 6종 (G4c) ──'))
   for (const c of r.results) {
     console.log(`  ${c.passed ? 'PASS' : 'FAIL'}  ${c.name}`)
     for (const v of c.violations) console.log(`         ↳ ${v}`)
   }
   if (r.schemaViolations.length) {
-    console.log('── 스키마 위반 ──')
+    console.log(t('── schema violations ──', '── 스키마 위반 ──'))
     for (const v of r.schemaViolations) console.log(`  ↳ ${v}`)
   }
-  console.log(`── G0 필수 필드 ${r.fieldResults.length}종 ──`)
+  console.log(t(`── G0 required fields ${r.fieldResults.length} ──`, `── G0 필수 필드 ${r.fieldResults.length}종 ──`))
   for (const f of r.fieldResults) console.log(`  ${f.ok ? ' ok ' : 'MISS'}  ${f.name}`)
-  console.log('── 품질 (게이트 아님, 스킬 자기검토용) ──')
-  console.log(`  ${r.quality.rationale_coverage === 1 ? ' ok ' : 'WARN'}  노드 배치 근거 ${(r.quality.rationale_coverage * 100).toFixed(0)}%`)
-  console.log(`  ${r.quality.has_verdict ? ' ok ' : 'WARN'}  판정`)
-  console.log(`  ${r.quality.has_excluded ? ' ok ' : 'WARN'}  붙이지 않은 것`)
-  console.log(`  ${r.quality.has_guarantees ? ' ok ' : 'WARN'}  보장하지 않는 것`)
+  console.log(t('── quality (not a gate — for skill self-review) ──', '── 품질 (게이트 아님, 스킬 자기검토용) ──'))
+  console.log(`  ${r.quality.rationale_coverage === 1 ? ' ok ' : 'WARN'}  ${t('node placement rationale', '노드 배치 근거')} ${(r.quality.rationale_coverage * 100).toFixed(0)}%`)
+  console.log(`  ${r.quality.has_verdict ? ' ok ' : 'WARN'}  ${t('verdict', '판정')}`)
+  console.log(`  ${r.quality.has_excluded ? ' ok ' : 'WARN'}  ${t('excluded (what was not attached)', '붙이지 않은 것')}`)
+  console.log(`  ${r.quality.has_guarantees ? ' ok ' : 'WARN'}  ${t('guarantees (what is not guaranteed)', '보장하지 않는 것')}`)
   console.log(`  ${r.quality.threshold_source_coverage === 1 ? ' ok ' : 'WARN'}  threshold_source ${(r.quality.threshold_source_coverage * 100).toFixed(0)}%`)
-  console.log(`  ${r.quality.has_scope ? ' ok ' : 'WARN'}  범위(Step 0 주어)`)
-  console.log(`  ${r.quality.has_host ? ' ok ' : 'WARN'}  호스트(Step 5 결정)`)
-  console.log(`  ${r.quality.catalog_reuse ? ' ok ' : 'WARN'}  카탈로그 재사용(uses)${r.quality.catalog_reuse ? '' : ' — 전 노드가 비었다. 카탈로그를 안 봤을 가능성'}`)
+  console.log(`  ${r.quality.has_scope ? ' ok ' : 'WARN'}  ${t('scope (Step 0 subject)', '범위(Step 0 주어)')}`)
+  console.log(`  ${r.quality.has_host ? ' ok ' : 'WARN'}  ${t('host (Step 5 decision)', '호스트(Step 5 결정)')}`)
+  console.log(`  ${r.quality.catalog_reuse ? ' ok ' : 'WARN'}  ${t('catalog reuse (uses)', '카탈로그 재사용(uses)')}${r.quality.catalog_reuse ? '' : t(' — every node is empty. the catalog was likely not consulted', ' — 전 노드가 비었다. 카탈로그를 안 봤을 가능성')}`)
   if (r.quality.assumed_ratio > 0) {
     const pct = (r.quality.assumed_ratio * 100).toFixed(0)
-    console.log(`  ${r.quality.assumed_ratio > 1 / 3 ? 'WARN' : ' ok '}  assumed 임계값 ${pct}%${r.quality.assumed_ratio > 1 / 3 ? ' — 1/3 초과. 산출 전 사용자에게 먼저 보고할 것' : ''}`)
+    console.log(`  ${r.quality.assumed_ratio > 1 / 3 ? 'WARN' : ' ok '}  ${t('assumed thresholds', 'assumed 임계값')} ${pct}%${r.quality.assumed_ratio > 1 / 3 ? t(' — over 1/3. report to the user before producing output', ' — 1/3 초과. 산출 전 사용자에게 먼저 보고할 것') : ''}`)
   }
   if (r.quality.assumed_undeclared.length) {
-    console.log(`  WARN  assumed 인데 guarantees.excludes 에 없음: ${r.quality.assumed_undeclared.join(', ')}`)
+    console.log(t(`  WARN  assumed but not in guarantees.excludes: ${r.quality.assumed_undeclared.join(', ')}`, `  WARN  assumed 인데 guarantees.excludes 에 없음: ${r.quality.assumed_undeclared.join(', ')}`))
   }
   if (r.quality.hooks_declared_without_check.length) {
-    console.log(`  WARN  훅 강제 선언에 check 명령 없음: ${r.quality.hooks_declared_without_check.join(', ')} — 강제할 기계가 없다. {gate, check} 로 선언할 것 (컴파일 시 hook_loss)`)
+    console.log(t(`  WARN  hook enforcement declared without a check command: ${r.quality.hooks_declared_without_check.join(', ')} — no machine to enforce it. declare as {gate, check} (counted as hook_loss at compile)`, `  WARN  훅 강제 선언에 check 명령 없음: ${r.quality.hooks_declared_without_check.join(', ')} — 강제할 기계가 없다. {gate, check} 로 선언할 것 (컴파일 시 hook_loss)`))
   }
   console.log('──')
   console.log(`  static_checks_passed  ${r.metrics.static_checks_passed}/6      G4c ${r.G4c ? 'PASS' : 'FAIL'}`)

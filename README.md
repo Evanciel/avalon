@@ -5,7 +5,7 @@
 **Graph engineering for AI agents — a complete harness, and loops that can't fool themselves.**<br/>
 Pin the pass conditions as numbers before the work starts. Let tools, not the AI, do the judging.
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-139%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-158%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 **English** · [한국어](README.ko.md) · [日本語](README.ja.md) · [简体中文](README.zh.md)
 
@@ -94,7 +94,7 @@ Two of the four steps are machines, one is you, and one is a machine watching yo
 
 ```bash
 git clone https://github.com/Evanciel/avalon && cd avalon
-npm test        # 139 tests, zero dependencies, Node 18+
+npm test        # 158 tests, zero dependencies, Node 18+
 ```
 
 To use it as a **Claude Code skill**, clone it into your skills directory — [SKILL.md](SKILL.md) has the frontmatter (`name: avalon`) that registers it:
@@ -140,6 +140,7 @@ node tools/run.mjs graph.json status          # whole picture, including gates t
 node tools/run.mjs graph.json start <node>    # refused if the node isn't in the frontier
 node tools/run.mjs graph.json measure <field> <value> [note]
 node tools/run.mjs graph.json done <node>     # the tool decides pass/fail, not you
+node tools/run.mjs graph.json verify          # ledger hash-chain check (tamper / truncation)
 node tools/run.mjs graph.json abort           # cancel the active node
 node tools/run.mjs graph.json lint            # OR-trap check (2+ gates on one node)
 ```
@@ -154,7 +155,9 @@ Every command takes `--json` for machine-readable output. The runner is mostly a
 | Edit the graph after `init` and keep going | Flagged **STALE** — the state remembers which graph hash it was built from |
 | Fail a gate more times than `max_retry` | **Halted** — the run stops and hands the decision to a human |
 
-Every accepted measurement is appended to the ledger. Nothing in it is ever rewritten — even `init --force` discards the state but keeps the ledger.
+Every accepted measurement is appended to the ledger. Nothing in it is ever rewritten — even `init --force` discards the state but keeps the ledger. And the ledger defends itself: every line is **hash-chained** to the one before it, and the state file anchors the chain head, so editing, deleting, or reordering a past entry makes every command refuse until a human looks.
+
+Tool messages are English by default; a Korean system locale (or `AVALON_LANG=ko`) switches them to Korean. Build artifacts are always English — their bytes are hashed, so they must not depend on the environment.
 
 ## What it looks like in practice
 
@@ -225,7 +228,7 @@ Every agent gets the same treatment: the validator vetoes its graph drafts, the 
 
 ## Tutorial: a real run
 
-Everything below actually happened — the commands and outputs are from a live session, mistakes included. (Tool messages are currently Korean; translations inline.)
+Everything below actually happened — the commands and outputs are from a live session, mistakes included. (These outputs were captured with Korean tool messages — the tools now default to English, with `AVALON_LANG=ko` for Korean; translations inline.)
 
 Say you have a small Node project, `my-api`, and you want an agent to add a search endpoint and make the tests pass.
 
@@ -408,11 +411,41 @@ Then it audits itself: every gate in the IR must appear in the output (`gate_los
 
 Frontier discipline, measurement ledger, gate verdicts, STALE detection, halt-to-human. Described in [Three ways to run it](#three-ways-to-run-it) above; the four invariants at the top of the file are the contract, and the self-test exists to prove each one actually bites.
 
+The ledger is a **hash chain**: each line carries `h = sha256(canonical(line))` plus the `h` of the line before it, and the state file anchors the chain head. This is what happened when a recorded measurement was edited from 7 to 1 after the fact — every command refuses, not just `verify`:
+
+```text
+$ node tools/run.mjs graph.json next
+🔴 ledger chain broken — refusing every command:
+  line 3: h mismatch — the line was edited
+  the ledger is the evidence layer; a run on tampered evidence proves nothing.
+  → inspect the ledger, archive it elsewhere, remove it, then re-init
+```
+
+One caveat, stated in the code where the chain lives: this is tamper-*evident*, not tamper-*proof*. It catches edits, deletions, reordering, and truncation; an actor who rewrites the ledger and the state file *together, consistently* is beyond it — that needs an external anchor, which is precisely the job reserved for the dormant ④ ARCHIVE.
+
 ### `install-hooks.mjs` + `hooks-gate.mjs` — enforcement that survives the session
 
 The installer takes `build/hooks.json` and wires it into the **project's** `.claude/settings.json` as a Stop hook. Its boundaries are the point: it writes nothing without `--yes` (prints the plan and exits 3 — an agent must not pass `--yes` without the user's say-so), it refuses the global `~/.claude` settings even with `--yes`, it refuses a spec whose hash doesn't match the current graph, it preserves everyone else's hooks, and reinstalling is idempotent. `--uninstall --yes` takes it back out.
 
 It also pins what was approved: the byte hash of `build/hooks.json` at approval time is embedded in the installed command (`--approved sha256:…`). If the file changes in any way afterwards, the gate blocks **before running a single check** and reports TAMPERED — without this, write access to one JSON file would equal the right to have arbitrary commands executed automatically at the end of every turn. Re-approval (`--yes` reinstall) is the only path back.
+
+And it demands proof that each check **can go red**. A hook entry may declare a `probe` — the same oracle aimed at a known-bad input, so it must exit non-zero. The installer runs every declared probe at plan and install time; a probe that exits 0 has just demonstrated a check that cannot fail, and the install is refused:
+
+```text
+$ node tools/install-hooks.mjs graph.json build/hooks.json --yes
+installer refused: probe refuted nothing — these checks cannot fail (or the probe never finished), so they enforce nothing:
+  G1: probe exit 0 ← node -e "process.exit(0)"
+```
+
+A healthy plan prints the counter-evidence per gate:
+
+```text
+  probe   G0  exit 1 ✅ (the oracle can fail)
+  probe   G0b  exit 1 ✅ (the oracle can fail)
+  probe   G4c  exit 1 ✅ (the oracle can fail)
+```
+
+Hooks without probes still install (reported as unproven — no retroactive breakage), and `--status` gives a read-only diagnosis any time: installed or not, approval pin intact or TAMPERED, spec current or STALE — without running a single check.
 
 Once installed, `hooks-gate.mjs` runs every declared check when the session tries to end its turn: all pass → exit 0; any fail → exit 2, which blocks the stop and feeds the failing gates back to the model. A changed graph makes it report STALE and block — enforcing yesterday's rules silently would be worse than stopping.
 
@@ -452,26 +485,28 @@ When a gate exhausts its retries with `on_exhaust: partial`, the workflow moves 
 
 `compile.mjs` emits `build/hooks.json` — per-gate check commands with an exit-code contract — and deliberately stops there. Installation is a separate tool with a separate approval: `install-hooks.mjs` shows its plan and refuses to write anything until a human-confirmed `--yes`, installs to the project's settings only (never global), and can be uninstalled as easily as installed. Auto-install stays forbidden: a tool that silently wires itself into your session's enforcement layer is the exact kind of unaccountable magic this project exists to prevent. Until installed, the spec blocks nothing — and completion reports are required to say so in those words.
 
+Avalon's own three hooks all carry probes: each check is also aimed at a committed broken fixture ([tools/fixtures/](tools/fixtures/)) that it must refuse, so this repo's enforcement layer is provably capable of going red.
+
 ## Avalon runs on Avalon
 
-The [graph.json](graph.json) at the repo root is not an example — it's Avalon's own development, managed by Avalon. Seven nodes (`frontend → validate → render_check → backend → compile_check → human_go → install_hooks`), six declared state fields, and three gates (G0, G0b, G4c) machine-enforced via `host.enforced_by_hook` — each with the actual command that checks it. [graph.md](graph.md) is its render, byte-verified by G0b.
+The [graph.json](graph.json) at the repo root is not an example — it's Avalon's own development, managed by Avalon. Seven nodes (`frontend → validate → render_check → backend → compile_check → human_go → install_hooks`), six declared state fields, and three gates (G0, G0b, G4c) machine-enforced via `host.enforced_by_hook` — each with the actual command that checks it, and a probe aimed at a committed broken fixture that proves the command can fail. [graph.md](graph.md) is its render, byte-verified by G0b.
 
 The graph's `guarantees` block is the honest-limits list in machine-adjacent form: `provides` states exactly what a green run proves, `excludes` states what it doesn't. If this repo's own gates went red, its CI would fail.
 
 ## How it's tested
 
-139 tests in three suites, all run by `npm test`:
+158 tests in three suites, all run by `npm test`:
 
-- **[test.mjs](tools/test.mjs) (88)** — schema and compiler behavior, including **execution semantics**: compiled workflow output is actually executed against stubbed hosts, so claims like "completed is false while abandoned is non-empty" are demonstrated, not asserted. A deploy-sync gate byte-compares the eight runtime files against the installed skill copy, so the repo and the deployed skill can't drift apart silently.
-- **[run.selftest.mjs](tools/run.selftest.mjs) (36)** — the runner's refusal walls, tested by the only method that proves a guard exists: *remove the guard, and the suite must turn red*. Each test constructs the forbidden situation (out-of-frontier start, unmeasured done, edited-graph continue, ledger tampering) and passes only if the runner refuses.
-- **[install.selftest.mjs](tools/install.selftest.mjs) (15)** — the installer's boundaries, same method: no write without `--yes`, global settings refused, stale spec refused, other people's hooks preserved, idempotent reinstall, and the gate blocking (exit 2) on failure and on STALE. Three of the fifteen are attack scenarios: they modify `build/hooks.json` *after* approval — swapping a check for a malicious command, even regenerating graph and spec consistently — and pass only if the gate blocks **without executing anything** (a marker file proves the planted command never ran).
+- **[test.mjs](tools/test.mjs) (93)** — schema and compiler behavior, including **execution semantics**: compiled workflow output is actually executed against stubbed hosts, so claims like "completed is false while abandoned is non-empty" are demonstrated, not asserted. New here: **fingerprint discrimination** — the same repo scaffolded twice must produce byte-identical fingerprints and two different repos must not, measured with real scaffold runs; the fingerprint's discriminative power was an *unverified* claim until these tests. A deploy-sync gate byte-compares the nine runtime files against the installed skill copy, so the repo and the deployed skill can't drift apart silently.
+- **[run.selftest.mjs](tools/run.selftest.mjs) (41)** — the runner's refusal walls, tested by the only method that proves a guard exists: *remove the guard, and the suite must turn red*. Each test constructs the forbidden situation (out-of-frontier start, unmeasured done, edited-graph continue) and passes only if the runner refuses. The ledger-chain tests attack real ledgers — edit a past measurement, truncate the tail, append past the chain — and pass only when every command refuses.
+- **[install.selftest.mjs](tools/install.selftest.mjs) (24)** — the installer's boundaries, same method: no write without `--yes`, global settings refused, stale spec refused, other people's hooks preserved, idempotent reinstall, and the gate blocking (exit 2) on failure and on STALE. Three are TOCTOU attack scenarios: they modify `build/hooks.json` *after* approval — swapping a check for a malicious command, even regenerating graph and spec consistently — and pass only if the gate blocks **without executing anything** (a marker file proves the planted command never ran). The rest pin the probe wall (an oracle that cannot fail is refused as decoration), `--status` reading without writing, and English being the actual default language.
 
 CI runs both suites on ubuntu and windows. Line endings are pinned to LF via [.gitattributes](.gitattributes) because G0b is a byte-exact oracle — a CRLF checkout would technically be a different document.
 
 ## Repository map
 
 ```
-SKILL.md                 skill entry point — procedure and discipline
+SKILL.md / SKILL.ko.md   skill entry point — procedure and discipline (en / ko)
 graph.json / graph.md    the self-applied graph (JSON is canonical, md is rendered)
 tools/
   scaffold.mjs           measure a repo → green skeleton
@@ -479,22 +514,25 @@ tools/
   validate.mjs           G0 coverage + 6 static checks + schema versioning
   render.mjs             JSON → markdown (--check is a byte-exact oracle)
   compile.mjs            IR → workflow script + hooks.json (never calls an LLM)
-  run.mjs                runner — frontier, measurement ledger, gate verdicts
+  run.mjs                runner — frontier, hash-chained ledger, gate verdicts
+  i18n.mjs               bilingual messages (en default, AVALON_LANG=ko) — artifacts stay English
   install-hooks.mjs      approval-gated hook installer (project settings only)
   hooks-gate.mjs         Stop-hook enforcer — red gate blocks ending the turn
-  test.mjs               schema / compiler / execution-semantics tests (88)
-  run.selftest.mjs       runner self-test — "does removing a guard turn it red?" (36)
-  install.selftest.mjs   installer/gate self-test — approval, scope, tamper walls (15)
+  fixtures/              committed broken inputs — what the probes aim at
+  test.mjs               schema / compiler / execution-semantics / fingerprint tests (93)
+  run.selftest.mjs       runner self-test — "does removing a guard turn it red?" (41)
+  install.selftest.mjs   installer/gate self-test — approval, probe, tamper walls (24)
 docs/graph/              design history, IR spec, the scar records above
 images/                  the diagrams in this README
 ```
 
 ## Honest limits
 
-- The tools prove the **declared oracle** only. Whether a check command means the same thing as its human-language title is still on you.
+- The tools prove the **declared oracle** only. Whether a check command means the same thing as its human-language title is still on you. A `probe` narrows this gap — it proves the oracle *can* fail — but does not close it; no deterministic tool can.
 - `build/hooks.json` is a spec. Until installed via `install-hooks.mjs --yes` (a human-approved step) it blocks nothing.
 - Runtime artifacts produced by agent nodes can't be verified at compile time.
-- Tool messages are currently Korean. The exit codes and JSON outputs are language-free; the prose isn't yet.
+- The ledger chain is tamper-*evident*, not tamper-*proof*: it catches edits, deletions, and truncation, but an actor who rewrites ledger and state together defeats it. The external anchor that would catch that is ④ ARCHIVE's job, and ④ remains dormant.
+- Tool messages are English by default (`AVALON_LANG=ko` for Korean). Code comments and the design history in [docs/graph/](docs/graph/) are Korean — the reasoning is documented, just not yet translated.
 
 The full, current list lives in the `guarantees` block of the self-applied graph.
 

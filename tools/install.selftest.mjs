@@ -6,6 +6,9 @@
  * 여기서 재는 방어벽:
  *   설치자 — 승인(--yes) 없이 쓰기 금지 · 전역 설치 금지 · 낡은 명세 금지 · 남의 훅 보존 · 멱등
  *   게이트 — 통과=0 · 미달=2(Stop 차단) · STALE=2(낡은 규칙으로 통과시키지 않는다)
+ *   박제   — 승인 뒤 바뀐 명세는 <실행 없이> 차단 (TOCTOU)
+ *   프로브 — 실패할 줄 모르는 오라클(probe exit 0)은 설치 거부
+ *   status — 읽기 전용 진단 · i18n — 기본 영어, AVALON_LANG=ko 로 한국어
  */
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -14,6 +17,10 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { specHash } from './hash.mjs'
 import { compileHooks } from './compile.mjs'
+
+// 이 스위트의 단정은 한국어 메시지에 걸려 있다 — 자식 프로세스까지 ko 로 고정한다.
+// (기본 언어는 영어다 — 영어 기본값 자체는 아래 'i18n' 구획이 잰다.)
+process.env.AVALON_LANG = 'ko'
 
 const TOOLS = dirname(fileURLToPath(import.meta.url))
 const TMP_BASE = process.env.CLAUDE_SELFTEST_TMP
@@ -29,9 +36,10 @@ const eq = (a, b, why) => { if (a !== b) throw new Error(`${why ?? ''} — expec
 const ok = (v, why) => { if (!v) throw new Error(why ?? 'falsy') }
 
 /** 도구를 자식 프로세스로 실행하고 exit 코드를 돌려받는다 — CLI 계약 그대로를 잰다 */
-function run(tool, args) {
+function run(tool, args, env) {
   try {
-    const out = execFileSync(process.execPath, [join(TOOLS, tool), ...args], { stdio: 'pipe' })
+    const out = execFileSync(process.execPath, [join(TOOLS, tool), ...args],
+      { stdio: 'pipe', env: env ? { ...process.env, ...env } : process.env })
     return { exit: 0, out: String(out) }
   } catch (e) {
     return { exit: e.status ?? -1, out: String(e.stdout ?? '') + String(e.stderr ?? '') }
@@ -39,11 +47,11 @@ function run(tool, args) {
 }
 
 /** 최소 그래프 — 검증 대상이 아니라 해시·훅 명세의 <운반체>다 */
-function miniGraph(checkCmd) {
+function miniGraph(checkCmd, probeCmd) {
   const g = {
     graph: {
       spec: { version: '1.4.0', hash: '' },
-      host: { enforced_by_hook: [{ gate: 'G1', check: checkCmd }] },
+      host: { enforced_by_hook: [{ gate: 'G1', check: checkCmd, ...(probeCmd ? { probe: probeCmd } : {}) }] },
     },
     gates: [{ id: 'G1', field: 'x', op: '==', threshold: 1 }],
   }
@@ -51,11 +59,11 @@ function miniGraph(checkCmd) {
   return g
 }
 
-function mk(name, checkCmd) {
+function mk(name, checkCmd, probeCmd) {
   const dir = join(DIR, name)
   mkdirSync(join(dir, 'build'), { recursive: true })
   mkdirSync(join(dir, 'tools'), { recursive: true })
-  const g = miniGraph(checkCmd)
+  const g = miniGraph(checkCmd, probeCmd)
   const graphPath = join(dir, 'graph.json')
   const hooksPath = join(dir, 'build', 'hooks.json')
   writeFileSync(graphPath, JSON.stringify(g, null, 2))
@@ -221,6 +229,84 @@ t('★ 그래프째로 말이 되게 재생성해도 — 승인 해시가 다르
   try { execFileSync(process.execPath, parts, { cwd: f.dir, stdio: 'pipe' }) } catch (e) { exit = e.status }
   eq(exit, 2, '일관된 재생성도 재승인 전에는 차단이어야 한다')
   ok(!existsSync(marker), '재생성된 check 도 실행되면 안 된다')
+})
+
+console.log('\n── 반증 프로브 — 실패할 줄 아는 오라클만 설치된다 ──')
+
+t('★ probe 가 exit!=0 이면 (오라클이 실패 가능함을 증명) 설치된다', () => {
+  const f = mk('probe-ok', PASS_CMD, FAIL_CMD)   // probe: 고장난 입력에서 exit 1
+  const r = run('install-hooks.mjs', [f.graphPath, f.hooksPath, '--yes'])
+  eq(r.exit, 0)
+  ok(r.out.includes('프로브'), '설치 출력에 프로브 판정이 보여야 한다')
+  ok(existsSync(f.settings), '설치되어야 한다')
+})
+
+t('★★ probe 가 exit 0 이면 — check 는 실패할 줄 모르는 장식이다 → 설치 거부', () => {
+  const f = mk('probe-deco', PASS_CMD, PASS_CMD)   // probe 도 통과 = 아무것도 반증 못 함
+  const r = run('install-hooks.mjs', [f.graphPath, f.hooksPath, '--yes'])
+  eq(r.exit, 1, '설치 거부(exit 1)여야 한다')
+  ok(r.out.includes('프로브'), '거부 사유에 프로브가 있어야 한다')
+  ok(!existsSync(f.settings), '장식 오라클이 설치되면 안 된다')
+})
+
+t('probe 는 compile 이 hooks.json 으로 운반한다', () => {
+  const g = miniGraph(PASS_CMD, FAIL_CMD)
+  const spec = JSON.parse(compileHooks(g))
+  eq(spec.hooks[0].probe, FAIL_CMD)
+})
+
+t('probe 없는 훅은 (미증명으로 보고하되) 설치는 된다 — 소급 강제는 하지 않는다', () => {
+  const f = mk('probe-none', PASS_CMD)
+  const r = run('install-hooks.mjs', [f.graphPath, f.hooksPath])
+  eq(r.exit, 3)
+  ok(r.out.includes('미증명'), '계획에 미증명이 보여야 한다')
+  eq(run('install-hooks.mjs', [f.graphPath, f.hooksPath, '--yes']).exit, 0)
+})
+
+console.log('\n── --status — 읽기 전용 진단 ──')
+
+t('status: 설치 전이면 exit 3, 아무것도 쓰지 않는다', () => {
+  const f = mk('st-none', PASS_CMD)
+  const r = run('install-hooks.mjs', [f.graphPath, f.hooksPath, '--status'])
+  eq(r.exit, 3)
+  ok(!existsSync(f.settings), 'status 가 settings 를 만들면 안 된다')
+})
+
+t('status: 설치 후 정합이면 exit 0', () => {
+  const f = mk('st-ok', PASS_CMD)
+  run('install-hooks.mjs', [f.graphPath, f.hooksPath, '--yes'])
+  const r = run('install-hooks.mjs', [f.graphPath, f.hooksPath, '--status'])
+  eq(r.exit, 0)
+  ok(r.out.includes('정합'), '정합이라고 말해야 한다')
+})
+
+t('★ status: 설치 후 hooks.json 이 바뀌면 exit 2 + TAMPERED — 게이트가 차단할 상태임을 미리 알린다', () => {
+  const f = mk('st-tamper', PASS_CMD)
+  run('install-hooks.mjs', [f.graphPath, f.hooksPath, '--yes'])
+  const spec = JSON.parse(readFileSync(f.hooksPath, 'utf8'))
+  spec.hooks[0].check = FAIL_CMD
+  writeFileSync(f.hooksPath, JSON.stringify(spec, null, 2))
+  const r = run('install-hooks.mjs', [f.graphPath, f.hooksPath, '--status'])
+  eq(r.exit, 2)
+  ok(r.out.includes('TAMPERED'), 'TAMPERED 라고 말해야 한다')
+})
+
+console.log('\n── i18n — 기본 언어는 영어다 ──')
+
+t('AVALON_LANG 없이(비 ko 로케일) 설치자 계획이 영어로 나온다', () => {
+  const f = mk('lang-en', PASS_CMD)
+  const r = run('install-hooks.mjs', [f.graphPath, f.hooksPath], { AVALON_LANG: 'en' })
+  eq(r.exit, 3)
+  ok(r.out.includes('install plan'), '영어 계획이어야 한다: ' + r.out.slice(0, 80))
+})
+
+t('전역 거부 메시지도 영어로 나온다 (AVALON_LANG=en)', () => {
+  const f = mk('lang-en2', PASS_CMD)
+  const r = run('install-hooks.mjs',
+    [f.graphPath, f.hooksPath, '--yes', '--settings', join(homedir(), '.claude', 'settings.json')],
+    { AVALON_LANG: 'en' })
+  eq(r.exit, 1)
+  ok(r.out.includes('global install refused'), '영어 거부 메시지여야 한다')
 })
 
 console.log('\n── 설치 → 집행 왕복 ──')

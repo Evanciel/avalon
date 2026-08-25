@@ -13,8 +13,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   loadGraph, loadState, saveState, cmdStart, cmdMeasure, cmdDone,
-  lintOrTrap, staleness, stateFileFor, freshState, evaluateGate, main,
+  lintOrTrap, staleness, stateFileFor, freshState, evaluateGate, main, verifyLedger,
 } from './run.mjs'
+
+// 이 스위트의 단정은 한국어 메시지에 걸려 있다 — ko 로 고정한다 (기본 언어는 영어).
+process.env.AVALON_LANG = 'ko'
 
 let pass = 0
 const fails = []
@@ -454,6 +457,63 @@ await okA('같은 그래프면 --force 없이도 init 이 이어간다', async (
   eq(Object.keys(loadState(ctx).completed).length, 1, '멀쩡한 상태를 날렸다')
 })
 
+console.log('\n== INV-4 강화 — 원장 해시 체인 (변조·절단은 모든 명령이 거부) ==')
+
+const ledOf = ctx => stateFileFor(ctx).replace(/\.json$/, '') + '.ledger.jsonl'
+
+ok('★ 원장 줄마다 h·prev 체인이 있고 verify 가 정합을 본다', () => {
+  const { ctx, s } = boot('lc1')
+  cmdStart(ctx, s, 'a'); cmdMeasure(ctx, s, 'count', 5); cmdDone(ctx, s, 'a')
+  const v = verifyLedger(ctx, loadState(ctx))
+  if (!v.ok) throw new Error('체인이 안 맞는다: ' + v.problems.join(' / '))
+  if (v.chained < 4) throw new Error(`체인 줄이 너무 적다: ${v.chained}`)
+  const rows = readFileSync(ledOf(ctx), 'utf8').trim().split('\n').map(JSON.parse)
+  if (!rows.every(r => r.h && r.prev)) throw new Error('h/prev 없는 줄이 있다')
+})
+
+ok('★★ 과거 측정값을 원장에서 고치면 — 모든 명령이 거부한다', () => {
+  const { ctx, s } = boot('lc2')
+  cmdStart(ctx, s, 'a'); cmdMeasure(ctx, s, 'count', 5, '실측'); cmdDone(ctx, s, 'a')
+  const rows = readFileSync(ledOf(ctx), 'utf8').trim().split('\n')
+  const i = rows.findIndex(r => r.includes('"measure"'))
+  rows[i] = rows[i].replace('"value":5', '"value":9')   // 증거 조작: 5 → 9
+  writeFileSync(ledOf(ctx), rows.join('\n') + '\n', 'utf8')
+  let threw = null
+  try { loadState(ctx) } catch (e) { threw = e }
+  if (!threw) throw new Error('변조된 원장을 조용히 받아들였다')
+  if (!String(threw.message).includes('원장 체인')) throw new Error('다른 이유로 거부: ' + threw.message)
+})
+
+ok('★ 원장 꼬리를 잘라도 — state.ledger_head 가 잡는다', () => {
+  const { ctx, s } = boot('lc3')
+  cmdStart(ctx, s, 'a'); cmdMeasure(ctx, s, 'count', 5); cmdDone(ctx, s, 'a')
+  const rows = readFileSync(ledOf(ctx), 'utf8').trim().split('\n')
+  writeFileSync(ledOf(ctx), rows.slice(0, -1).join('\n') + '\n', 'utf8')   // 마지막 줄 은닉
+  let threw = null
+  try { loadState(ctx) } catch (e) { threw = e }
+  if (!threw) throw new Error('절단을 못 잡았다')
+})
+
+await okA('verify 명령: 정합이면 exit 0, 변조면 exit 1', async () => {
+  const ctx = fixture({ name: 'lc4' })
+  await runQuiet([ctx.graphPath, 'init'])
+  eq(await runQuiet([ctx.graphPath, 'verify']), 0, '정합 verify')
+  const rows = readFileSync(ledOf(ctx), 'utf8').trim().split('\n')
+  rows[0] = rows[0].replace('"init"', '"INIT"')
+  writeFileSync(ledOf(ctx), rows.join('\n') + '\n', 'utf8')
+  eq(await runQuiet([ctx.graphPath, 'verify']), 1, '변조 verify')
+})
+
+ok('체인 도입 전 유산 줄(h 없음)이 앞에 있어도 이어서 돈다', () => {
+  const ctx = fixture({ name: 'lc5' })
+  writeFileSync(ledOf(ctx), JSON.stringify({ at: 't0', action: 'legacy' }) + '\n', 'utf8')
+  const s = loadState(ctx, { create: true })   // 유산 위에 생성 — 체인은 여기서 시작한다
+  cmdStart(ctx, s, 'a')
+  const v = verifyLedger(ctx, loadState(ctx))
+  if (!v.ok) throw new Error('유산 줄을 위반으로 잡았다: ' + v.problems.join(' / '))
+  if (v.chained < 2) throw new Error('체인이 시작되지 않았다')
+})
+
 // ── 결과 ───────────────────────────────────────────────────────────────────
 
 console.log(`\n──\n  통과 ${pass} / 실패 ${fails.length}   (임시: ${DIR})`)
@@ -462,4 +522,4 @@ if (fails.length) {
   for (const [n, e] of fails) console.log(`  · ${n}\n      ${e?.stack ?? e}`)
   process.exit(1)
 }
-console.log('  🟢 전부 통과 — 거부 방어벽 15종이 <실제로> 걸린다')
+console.log('  🟢 전부 통과 — 거부 방어벽이 <실제로> 걸린다')

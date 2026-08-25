@@ -25,6 +25,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from '
 import { execSync } from 'node:child_process'
 import { resolve, join, basename } from 'node:path'
 import { stamp } from './hash.mjs'
+import { t } from './i18n.mjs'
 
 // ── 실측 ────────────────────────────────────────────────────────────────────
 const SKIP = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'artifacts',
@@ -82,24 +83,24 @@ function measureMarkers(root) {
   if (existsSync(pj)) { try { scripts = JSON.parse(readFileSync(pj, 'utf8')).scripts ?? {} } catch { /* 무시 */ } }
 
   const checks = ['typecheck', 'test', 'smoke', 'lint', 'test:holdout'].filter((k) => scripts[k])
-  m.push(checks.length ? `검증 스크립트: ${checks.join(' · ')}` : '검증 스크립트 없음')
+  m.push(checks.length ? `verify scripts: ${checks.join(' · ')}` : 'no verify scripts')
 
   if (existsSync(join(root, '.github/workflows'))) {
     let n = 0
     try { n = readdirSync(join(root, '.github/workflows')).length } catch { /* 무시 */ }
-    m.push(`GitHub Actions 워크플로 ${n}개`)
-  } else m.push('CI 설정 없음')
+    m.push(`GitHub Actions workflows: ${n}`)
+  } else m.push('no CI config')
 
   try {
     execSync('git rev-parse --git-dir', { cwd: root, stdio: 'ignore' })
     const dirty = execSync('git status --porcelain', { cwd: root, encoding: 'utf8' })
       .split('\n').filter(Boolean).length
     const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: root, encoding: 'utf8' }).trim()
-    m.push(`git: 브랜치 ${branch} · 미커밋 ${dirty}개`)
-  } catch { m.push('git 저장소 아님') }
+    m.push(`git: branch ${branch} · uncommitted ${dirty}`)
+  } catch { m.push('not a git repo') }
 
-  if (existsSync(join(root, 'CLAUDE.md'))) m.push('프로젝트 CLAUDE.md 있음')
-  if (existsSync(join(root, '.claude/verify.json'))) m.push('verify.json 재정의 있음')
+  if (existsSync(join(root, 'CLAUDE.md'))) m.push('has project CLAUDE.md')
+  if (existsSync(join(root, '.claude/verify.json'))) m.push('has verify.json override')
   return m
 }
 
@@ -125,18 +126,20 @@ function skeleton({ root, task, name, files, modules, stack, markers }) {
       name,
       mode: 'B',
       entry: 'survey',
-      verdict: { statement: `TODO: ${name} 1회분이 끝났다고 말할 수 있는 조건`, ground_truth: 'measured' },
+      verdict: { statement: `TODO: the condition under which one run of ${name} can be called done`, ground_truth: 'measured' },
       excluded: [],
       // 보장하는 것과 보장하지 않는 것을 나눠 적는다. 안 적으면 전부 보장한다고 읽힌다.
       guarantees: {
-        provides: ['TODO: 이 그래프가 통과하면 무엇이 참인가'],
-        does_not: ['TODO: 이 그래프가 보장하지 않는 것 — 여기가 비면 과잉 주장이 된다'],
+        provides: ['TODO: what is true when this graph passes'],
+        // 필드명은 excludes 가 정본이다 — validate 의 품질 검사와 render 가 이 이름을 읽는다.
+        // (does_not 으로 어긋나 있던 것을 2026-08-25 실측으로 잡았다 — 골격이 WARN 을 달고 태어났다.)
+        excludes: ['TODO: what this graph does not guarantee — leaving this empty overclaims'],
       },
-      scope: { unit: 'TODO: 무엇 1회분인가' },
+      scope: { unit: 'TODO: one run of what' },
       // compile.mjs 는 pipeline 이 'workflow-script' 인 그래프만 컴파일한다.
       host: {
         pipeline: 'workflow-script',
-        reason: 'TODO: 왜 이 호스트인가',
+        reason: 'TODO: why this host',
         state_file: '.avalon/run.state.json',   // 러너가 바로 쓸 수 있는 구체 경로 — 골격은 실행까지 초록이어야 한다
         enforced_by_hook: ['G0'],
       },
@@ -162,7 +165,7 @@ function skeleton({ root, task, name, files, modules, stack, markers }) {
         id: 'survey',
         kind: 'work',
         runner: 'agent',
-        rationale: 'TODO: 왜 이 단이 필요한가. 실측으로 시작한다 — 추측 위에 그래프를 세우지 않는다',
+        rationale: 'TODO: why this stage exists. Start by measuring — never build a graph on guesses',
         produces: ['survey.md'],
         retry: { max: 2, on_exhaust: 'fail' },
         policy: {
@@ -175,7 +178,7 @@ function skeleton({ root, task, name, files, modules, stack, markers }) {
         id: 'check',
         kind: 'work',
         runner: 'script',
-        rationale: 'TODO: 무엇을 어떻게 재는가. 재는 단이 없으면 게이트는 장식이다',
+        rationale: 'TODO: what is measured and how. Without a measuring stage, gates are decoration',
         produces: ['gate_pass'],
         retry: { max: 1, on_exhaust: 'fail' },
         policy: {
@@ -187,7 +190,7 @@ function skeleton({ root, task, name, files, modules, stack, markers }) {
         id: 'review',
         kind: 'human',
         runner: 'manual',
-        rationale: '사람이 판정한다. 자동으로 못 재는 것을 통과로 쓰지 않는다',
+        rationale: 'A human judges here. What cannot be measured automatically must not count as a pass',
         produces: [],
         retry: { max: 0, on_exhaust: 'fail' },
         policy: {
@@ -211,7 +214,7 @@ function skeleton({ root, task, name, files, modules, stack, markers }) {
         threshold: 1,
         on_fail: { goto: 'survey', max_retry: 2 },
         ground_truth: 'measured',
-        threshold_source: 'TODO: 이 숫자가 어디서 나왔는지. 근거 없는 임계값은 장식이다',
+        threshold_source: 'TODO: where this number came from. A threshold without evidence is decoration',
       },
     ],
     policy: {
@@ -227,12 +230,14 @@ function skeleton({ root, task, name, files, modules, stack, markers }) {
 // ── main ────────────────────────────────────────────────────────────────────
 const [, , rawRoot, task, outArg] = process.argv
 if (!rawRoot || !task) {
-  console.error('usage: node tools/scaffold.mjs <대상경로> "<과제 한 줄>" [출력.json]')
+  console.error(t('usage: node tools/scaffold.mjs <target-path> "<one-line task>" [out.json]',
+                  'usage: node tools/scaffold.mjs <대상경로> "<과제 한 줄>" [출력.json]'))
   process.exit(1)
 }
 const root = resolve(rawRoot).replace(/\\/g, '/')
 if (!existsSync(root) || !statSync(root).isDirectory()) {
-  console.error(`대상 경로가 디렉터리가 아니다: ${root}`)
+  console.error(t(`target path is not a directory: ${root}`,
+                  `대상 경로가 디렉터리가 아니다: ${root}`))
   process.exit(1)
 }
 
@@ -251,15 +256,20 @@ const stamped = stamp(g)
 const out = outArg ?? 'graph.draft.json'
 writeFileSync(out, JSON.stringify(stamped, null, 2) + '\n', 'utf8')
 
-console.log(`골격 생성  ${out}`)
-console.log(`  대상        ${root}`)
-console.log(`  스택        ${stamped.project.fingerprint.stack.join(' · ') || '(감지 없음)'}`)
-console.log(`  규모        파일 ${stamped.project.fingerprint.scale.files} / 모듈 ${stamped.project.fingerprint.scale.modules}`)
-for (const m of stamped.project.fingerprint.markers) console.log(`  실측        ${m}`)
+console.log(t(`skeleton written  ${out}`, `골격 생성  ${out}`))
+console.log(t(`  target      ${root}`, `  대상        ${root}`))
+console.log(t(`  stack       ${stamped.project.fingerprint.stack.join(' · ') || '(none detected)'}`,
+              `  스택        ${stamped.project.fingerprint.stack.join(' · ') || '(감지 없음)'}`))
+console.log(t(`  scale       files ${stamped.project.fingerprint.scale.files} / modules ${stamped.project.fingerprint.scale.modules}`,
+              `  규모        파일 ${stamped.project.fingerprint.scale.files} / 모듈 ${stamped.project.fingerprint.scale.modules}`))
+for (const m of stamped.project.fingerprint.markers) console.log(t(`  measured    ${m}`, `  실측        ${m}`))
 console.log(`  fingerprint ${stamped.project.fingerprint.hash}`)
 console.log(`  spec.hash   ${stamped.graph.spec.hash}`)
 console.log('')
-console.log('다음: TODO: 를 실제 설계로 바꾼 뒤')
-console.log('  node tools/hash.mjs ' + out + ' --write     # 해시 재스탬프 (필수)')
-console.log('  node tools/validate.mjs ' + out + '          # G0 확인')
+console.log(t('next: replace the TODO: entries with the real design, then',
+              '다음: TODO: 를 실제 설계로 바꾼 뒤'))
+console.log(t('  node tools/hash.mjs ' + out + ' --write     # re-stamp hashes (required)',
+              '  node tools/hash.mjs ' + out + ' --write     # 해시 재스탬프 (필수)'))
+console.log(t('  node tools/validate.mjs ' + out + '          # check G0',
+              '  node tools/validate.mjs ' + out + '          # G0 확인'))
 console.log('  node tools/compile.mjs ' + out + ' build/graph.workflow.js')

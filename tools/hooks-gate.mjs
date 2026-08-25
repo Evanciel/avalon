@@ -1,30 +1,31 @@
 #!/usr/bin/env node
 /**
- * Avalon 훅 게이트 — 설치된 훅이 실제로 실행하는 <집행자>.
+ * Avalon hook gate — the EXECUTOR the installed hook actually runs.
  *
- * Stop 훅으로 설치되어, 세션이 턴을 끝내려 할 때 게이트 check 를 전부 돌린다.
- *   exit 0  → 전부 통과. 통과시킨다.
- *   exit 2  → 미달 게이트 존재. Stop 훅 규약상 2 는 <차단>이고 stderr 가 모델에게 전달된다.
+ * Installed as a Stop hook, it runs every gate check when the session tries to end its turn.
+ *   exit 0  → all pass. Let the turn end.
+ *   exit 2  → a gate is red. Under the Stop-hook contract, 2 BLOCKS and stderr reaches the model.
  *
- * INV-1: 이 파일은 LLM 을 호출하지 않는다. 판정은 check 명령의 exit 코드가 전부다.
+ * INV-1: this file never calls an LLM. The verdict is the check command's exit code, nothing else.
  *
- * ⚠️ STALE 은 통과가 아니라 차단이다. hooks.json 의 spec_hash 와 지금 그래프의 해시가
- *    다르면, 이 명세는 <다른 그래프>를 강제하고 있는 것이다. 낡은 규칙으로 통과시키는 것과
- *    낡은 규칙으로 차단하는 것 중, 정직한 쪽은 차단이다 — 재컴파일 → 재설치가 해소 경로다.
+ * ⚠️ STALE blocks, it does not pass. If hooks.json's spec_hash differs from the current
+ *    graph's hash, this spec is enforcing a DIFFERENT graph. Between passing on stale rules
+ *    and blocking on stale rules, blocking is the honest one — recompile → reinstall to resolve.
  *
- * ⚠️ 승인 박제 (--approved) — 승인과 실행 사이의 TOCTOU 를 막는다.
- *    설치자는 <승인 시점의 hooks.json 바이트 해시>를 settings 명령에 박아 넣는다.
- *    실행 시점에 파일이 그 해시와 다르면 — check 명령을 바꿔치기했든, 그래프째로
- *    말이 되게 재생성했든 — <아무 명령도 실행하지 않고> 차단한다(exit 2).
- *    이게 없으면 파일 쓰기 권한이 곧 임의 명령 자동 실행 권한이 된다.
+ * ⚠️ Approval pin (--approved) — closes the TOCTOU between approval and execution.
+ *    The installer embeds the byte hash of hooks.json AS APPROVED into the settings command.
+ *    At run time, if the file differs from that hash — a swapped check, or a whole
+ *    consistently-regenerated graph+spec — the gate blocks WITHOUT executing anything (exit 2).
+ *    Without this, write access to one file equals the right to run arbitrary commands.
  *
- * 사용
+ * Usage
  *   node tools/hooks-gate.mjs <graph.json> <hooks.json> [--approved <sha256:...>] [--timeout <ms>] [--json]
  */
 import { readFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { specHash, sha256, isMain } from './hash.mjs'
+import { t } from './i18n.mjs'
 
 export function runGate(graphPath, hooksPath, { timeout = 60_000, approved = null } = {}) {
   const g = JSON.parse(readFileSync(graphPath, 'utf8'))
@@ -32,16 +33,21 @@ export function runGate(graphPath, hooksPath, { timeout = 60_000, approved = nul
   const spec = JSON.parse(hooksRaw)
   const cwd = dirname(resolve(graphPath))
 
-  // 승인 박제 대조 — 실행보다 <먼저>. 여기서 걸리면 어떤 check 도 실행되지 않는다.
+  // Approval-pin comparison — BEFORE anything runs. Failing here means zero checks execute.
   if (approved) {
-    const actual = sha256(hooksRaw)   // 'sha256:<64hex>' 형식으로 반환된다
+    const actual = sha256(hooksRaw)   // returns 'sha256:<64hex>'
     if (actual !== approved) {
       return {
         ok: false, stale: true,
-        message: `🔴 TAMPERED — hooks.json 이 승인받은 명세와 다르다.\n` +
-                 `   승인: ${approved.slice(7, 19)}…  지금: ${actual.slice(7, 19)}…\n` +
-                 `   승인 없이 바뀐 check 는 <하나도 실행하지 않고> 차단한다.\n` +
-                 `   해소: 변경을 검토한 뒤 node tools/install-hooks.mjs --yes 재설치 (재승인)`,
+        message: t(
+          `🔴 TAMPERED — hooks.json differs from the approved spec.\n` +
+          `   approved: ${approved.slice(7, 19)}…  actual: ${actual.slice(7, 19)}…\n` +
+          `   checks changed without approval run ZERO times — blocked before execution.\n` +
+          `   resolve: review the change, then reinstall: node tools/install-hooks.mjs --yes (re-approval)`,
+          `🔴 TAMPERED — hooks.json 이 승인받은 명세와 다르다.\n` +
+          `   승인: ${approved.slice(7, 19)}…  지금: ${actual.slice(7, 19)}…\n` +
+          `   승인 없이 바뀐 check 는 <하나도 실행하지 않고> 차단한다.\n` +
+          `   해소: 변경을 검토한 뒤 node tools/install-hooks.mjs --yes 재설치 (재승인)`),
         results: [],
       }
     }
@@ -51,9 +57,13 @@ export function runGate(graphPath, hooksPath, { timeout = 60_000, approved = nul
   if (spec.spec_hash !== now) {
     return {
       ok: false, stale: true,
-      message: `🔴 STALE — hooks.json 은 ${spec.spec_hash.slice(7, 19)}… 를 강제하는데 지금 그래프는 ${now.slice(7, 19)}… 다.\n` +
-               `   낡은 명세로는 통과도 차단도 정직하지 않다 → 차단한다.\n` +
-               `   해소: node tools/compile.mjs → node tools/install-hooks.mjs --yes 재설치`,
+      message: t(
+        `🔴 STALE — hooks.json enforces ${spec.spec_hash.slice(7, 19)}… but the graph is now ${now.slice(7, 19)}….\n` +
+        `   On stale rules neither pass nor block is honest → block.\n` +
+        `   resolve: node tools/compile.mjs → node tools/install-hooks.mjs --yes (reinstall)`,
+        `🔴 STALE — hooks.json 은 ${spec.spec_hash.slice(7, 19)}… 를 강제하는데 지금 그래프는 ${now.slice(7, 19)}… 다.\n` +
+        `   낡은 명세로는 통과도 차단도 정직하지 않다 → 차단한다.\n` +
+        `   해소: node tools/compile.mjs → node tools/install-hooks.mjs --yes 재설치`),
       results: [],
     }
   }
@@ -64,7 +74,7 @@ export function runGate(graphPath, hooksPath, { timeout = 60_000, approved = nul
     try {
       execSync(h.check, { cwd, timeout, stdio: 'pipe' })
     } catch (e) {
-      // 타임아웃도 미달이다 — 판정 못 한 게이트를 통과로 치지 않는다
+      // A timeout is a failure too — a gate that could not be judged does not count as passed.
       exit = typeof e.status === 'number' ? e.status : 124
     }
     results.push({ gate: h.gate, check: h.check, exit, pass: exit === (h.expect_exit ?? 0) })
@@ -73,8 +83,8 @@ export function runGate(graphPath, hooksPath, { timeout = 60_000, approved = nul
   return {
     ok: failed.length === 0, stale: false,
     message: failed.length === 0
-      ? `🟢 훅 게이트 통과 — ${results.length}개 check 전부 exit 0`
-      : `🔴 훅 게이트 미달 ${failed.length}/${results.length}:\n` +
+      ? t(`🟢 hook gate passed — all ${results.length} checks exit 0`, `🟢 훅 게이트 통과 — ${results.length}개 check 전부 exit 0`)
+      : t(`🔴 hook gate failed ${failed.length}/${results.length}:\n`, `🔴 훅 게이트 미달 ${failed.length}/${results.length}:\n`) +
         failed.map((r) => `   ${r.gate}  exit ${r.exit}  ← ${r.check}`).join('\n'),
     results,
   }
@@ -97,7 +107,10 @@ if (isMain(import.meta.url)) {
   }
   let r
   try { r = runGate(graphPath, hooksPath, { timeout, approved }) }
-  catch (e) { console.error(`🔴 훅 게이트 실행 불가: ${e.message} — 판정 못 하면 차단한다`); process.exit(2) }
+  catch (e) {
+    console.error(t(`🔴 hook gate cannot run: ${e.message} — what cannot be judged is blocked`, `🔴 훅 게이트 실행 불가: ${e.message} — 판정 못 하면 차단한다`))
+    process.exit(2)
+  }
   if (json) console.log(JSON.stringify(r, null, 2))
   ;(r.ok ? console.log : console.error)(r.message)
   process.exit(r.ok ? 0 : 2)

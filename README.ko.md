@@ -5,7 +5,7 @@
 **AI 에이전트를 위한 그래프 엔지니어링 — 완전한 하네스, 그리고 스스로를 속이지 못하는 루프.**<br/>
 일을 시작하기 전에 통과 조건을 숫자로 못 박고, 판정은 AI가 아니라 도구가 내립니다.
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-139%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-158%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · **한국어** · [日本語](README.ja.md) · [简体中文](README.zh.md)
 
@@ -94,7 +94,7 @@ Avalon은 순서를 뒤집습니다. 일을 시작하기 **전에** 계획을 �
 
 ```bash
 git clone https://github.com/Evanciel/avalon && cd avalon
-npm test        # 테스트 139건, 의존성 0개, Node 18+
+npm test        # 테스트 158건, 의존성 0개, Node 18+
 ```
 
 **Claude Code 스킬**로 쓰려면 스킬 디렉터리에 클론하면 됩니다 — [SKILL.md](SKILL.md)의 frontmatter(`name: avalon`)가 등록을 담당합니다:
@@ -140,6 +140,7 @@ node tools/run.mjs graph.json status          # 전체 그림 + 안 돈 게이�
 node tools/run.mjs graph.json start <노드>    # 프론티어 밖이면 거부
 node tools/run.mjs graph.json measure <필드> <값> [메모]
 node tools/run.mjs graph.json done <노드>     # 통과/미달은 도구가 정한다
+node tools/run.mjs graph.json verify          # 원장 해시 체인 검증 (변조·절단)
 node tools/run.mjs graph.json abort           # 진행 중 노드 취소
 node tools/run.mjs graph.json lint            # OR 함정 검사 (한 노드에 게이트 2개+)
 ```
@@ -154,7 +155,9 @@ node tools/run.mjs graph.json lint            # OR 함정 검사 (한 노드에 
 | `init` 후에 그래프를 고치고 계속 진행 | **STALE** 표시 — 상태는 자기가 어느 그래프 해시에서 태어났는지 기억한다 |
 | 게이트를 `max_retry`보다 많이 실패 | **중단** — 실행이 멈추고 결정이 사람에게 넘어간다 |
 
-수락된 측정은 전부 원장에 덧붙습니다. 원장은 절대 고쳐 쓰지 않고, `init --force`도 상태만 버리지 원장은 남깁니다.
+수락된 측정은 전부 원장에 덧붙습니다. 원장은 절대 고쳐 쓰지 않고, `init --force`도 상태만 버리지 원장은 남깁니다. 그리고 원장은 스스로를 방어합니다: 모든 줄이 바로 앞 줄과 **해시 체인**(`h`/`prev`)으로 묶이고 상태 파일이 체인 머리를 고정해서, 과거 항목을 고치거나 지우거나 순서를 바꾸면 사람이 볼 때까지 모든 명령이 거부합니다.
+
+도구 메시지는 기본이 영어입니다. 시스템 로케일이 한국어이거나 `AVALON_LANG=ko`를 주면 한국어로 나옵니다. 빌드 산출물은 항상 영어입니다 — 바이트가 해시되므로 환경에 따라 달라지면 안 되기 때문입니다.
 
 ## 실전에서는 이렇게 보인다
 
@@ -410,11 +413,43 @@ IR에서 워크플로 스크립트로 가는 순수 함수입니다. 내부에�
 
 프론티어 규율, 측정 원장, 게이트 판정, STALE 감지, 중단 시 사람 이관. [돌리는 세 가지 방법](#돌리는-세-가지-방법)에서 설명했습니다. 파일 머리의 불변식 4개가 계약이고, 자기시험은 그 각각이 실제로 무는지 증명하려고 존재합니다.
 
+원장은 **해시 체인**입니다: 각 줄이 `h = sha256(canonical(line))`과 바로 앞 줄의 `h`를 함께 지니고, 상태 파일이 체인 머리를 고정합니다. 아래는 기록된 측정값 7이 사후에 1로 고쳐졌을 때 실제로 벌어진 일입니다 — `verify`만이 아니라 모든 명령이 거부합니다:
+
+```text
+$ node tools/run.mjs graph.json next
+🔴 ledger chain broken — refusing every command:
+  line 3: h mismatch — the line was edited
+  the ledger is the evidence layer; a run on tampered evidence proves nothing.
+  → inspect the ledger, archive it elsewhere, remove it, then re-init
+```
+
+(원장 체인이 끊어졌다 — 모든 명령을 거부한다: 3번째 줄 `h` 불일치, 그 줄이 수정되었다. 원장은 증거 계층이라, 변조된 증거 위의 실행은 아무것도 증명하지 않는다.)
+
+주의 하나는 체인이 사는 코드에 그대로 적어 두었습니다: 이건 변조 *증거(tamper-evident)*이지 변조 *불가(tamper-proof)*가 아닙니다. 수정·삭제·순서 바꿈·절단은 잡지만, 원장과 상태 파일을 *함께, 말이 되게* 고쳐 쓰는 자는 이 체인 너머에 있습니다 — 그건 외부 앵커가 필요한 일이고, 정확히 그 일이 휴면 중인 ④ ARCHIVE에 예약되어 있습니다.
+
 ### `install-hooks.mjs` + `hooks-gate.mjs` — 세션을 넘어서는 강제
 
 설치자는 `build/hooks.json`을 **프로젝트의** `.claude/settings.json`에 Stop 훅으로 심습니다. 핵심은 설치자가 지키는 경계입니다: `--yes` 없이는 아무것도 쓰지 않고(계획만 보여주고 exit 3 — 에이전트가 사용자 승인 없이 `--yes`를 붙이는 건 금지), 전역 `~/.claude` settings는 `--yes`여도 거부하고, 해시가 현재 그래프와 안 맞는 낡은 명세를 거부하고, 남의 훅 항목은 보존하고, 재설치는 멱등입니다. `--uninstall --yes`로 언제든 뺄 수 있습니다.
 
 그리고 **승인받은 것 자체를 박제합니다**: 승인 시점 `build/hooks.json`의 바이트 해시가 설치되는 명령에 그대로 박힙니다(`--approved sha256:…`). 이후 파일이 어떤 식으로든 바뀌면 게이트는 **check 하나 실행하기 전에** TAMPERED 로 차단합니다 — 이게 없으면 JSON 파일 하나에 대한 쓰기 권한이 곧 매 턴 끝마다 임의 명령을 자동 실행시킬 권한이 됩니다. 되돌리는 길은 재승인(`--yes` 재설치)뿐입니다.
+
+그리고 각 check가 **빨개질 수 있다는 증명**을 요구합니다. 훅 항목에는 `probe`를 선언할 수 있습니다 — 같은 오라클을 일부러 고장난 입력에 겨눈 것이라, 반드시 exit가 0이 아니어야 합니다. 설치자는 선언된 프로브를 계획·설치 시점에 전부 돌립니다. exit 0으로 끝난 프로브는 방금 "실패할 수 없는 검사"를 시연한 것이고, 그 설치는 거부됩니다:
+
+```text
+$ node tools/install-hooks.mjs graph.json build/hooks.json --yes
+installer refused: probe refuted nothing — these checks cannot fail (or the probe never finished), so they enforce nothing:
+  G1: probe exit 0 ← node -e "process.exit(0)"
+```
+
+건강한 계획은 게이트마다 반증 증거를 출력합니다:
+
+```text
+  probe   G0  exit 1 ✅ (the oracle can fail)
+  probe   G0b  exit 1 ✅ (the oracle can fail)
+  probe   G4c  exit 1 ✅ (the oracle can fail)
+```
+
+프로브 없는 훅도 설치는 됩니다(미증명으로 보고될 뿐 — 소급 파괴는 없습니다). 그리고 `--status`는 언제든 읽기 전용 진단을 줍니다: 설치 여부, 승인 박제가 온전한지 TAMPERED인지, 명세가 최신인지 STALE인지 — check는 하나도 실행하지 않으면서.
 
 설치되면 `hooks-gate.mjs`가 세션이 턴을 끝내려 할 때마다 선언된 check를 전부 돌립니다: 전부 통과 → exit 0, 하나라도 미달 → exit 2로 종료를 차단하고 미달 게이트를 모델에게 되먹입니다. 그래프가 바뀌면 STALE을 보고하고 차단합니다 — 어제의 규칙을 조용히 강제하는 것보다는 멈추는 게 낫습니다.
 
@@ -454,26 +489,28 @@ IR에서 워크플로 스크립트로 가는 순수 함수입니다. 내부에�
 
 `compile.mjs`는 `build/hooks.json` — 게이트별 check 명령 + exit 코드 계약 — 까지만 내고, 거기서 멈추는 게 의도입니다. 설치는 별도 도구가 별도 승인 아래 합니다: `install-hooks.mjs`는 계획을 보여준 뒤 사람이 확인한 `--yes` 전까지 아무것도 쓰지 않고, 프로젝트 settings에만(전역 금지) 설치하며, 설치한 만큼 쉽게 제거됩니다. 자동 설치는 여전히 금지입니다. 자기를 세션의 강제 계층에 조용히 심는 도구야말로, 이 프로젝트가 막으려고 존재하는 종류의 설명 불가능한 마법이기 때문입니다. 설치 전까지 명세는 아무것도 차단하지 않습니다 — 그리고 완료 보고서는 이 문장을 그대로 쓰도록 요구됩니다.
 
+아발론 자신의 훅 3개도 전부 프로브를 달고 있습니다: 각 check는 커밋된 고장 픽스처([tools/fixtures/](tools/fixtures/))에도 겨눠져 있고 그걸 거부해야 하므로, 이 저장소의 강제 계층은 빨개질 수 있음이 증명되어 있습니다.
+
 ## 아발론은 아발론 위에서 돈다
 
-저장소 루트의 [graph.json](graph.json)은 예제가 아닙니다 — 아발론 자신의 개발을 아발론이 관리하는 그래프입니다. 노드 7개(`frontend → validate → render_check → backend → compile_check → human_go → install_hooks`), 선언된 상태 필드 6개, 그리고 게이트 3개(G0 · G0b · G4c)가 `host.enforced_by_hook`으로 기계 강제됩니다 — 각각 실제로 검사하는 명령이 붙어서. [graph.md](graph.md)는 그 렌더이고, G0b가 바이트 단위로 검증합니다.
+저장소 루트의 [graph.json](graph.json)은 예제가 아닙니다 — 아발론 자신의 개발을 아발론이 관리하는 그래프입니다. 노드 7개(`frontend → validate → render_check → backend → compile_check → human_go → install_hooks`), 선언된 상태 필드 6개, 그리고 게이트 3개(G0 · G0b · G4c)가 `host.enforced_by_hook`으로 기계 강제됩니다 — 각각 실제로 검사하는 명령이 붙어 있고, 그 명령이 실패할 수 있음을 증명하는 프로브(커밋된 고장 픽스처를 겨눈)가 함께 달려 있습니다. [graph.md](graph.md)는 그 렌더이고, G0b가 바이트 단위로 검증합니다.
 
 그래프의 `guarantees` 블록은 정직한 한계 목록의 기계 인접 형태입니다: `provides`는 초록 실행이 정확히 무엇을 증명하는지, `excludes`는 무엇을 증명하지 않는지 적습니다. 이 저장소 자신의 게이트가 빨개지면 CI가 실패합니다.
 
 ## 어떻게 테스트하나
 
-`npm test` 하나로 도는 세 스위트, 합계 139건:
+`npm test` 하나로 도는 세 스위트, 합계 158건:
 
-- **[test.mjs](tools/test.mjs) (88건)** — 스키마와 컴파일러 동작, 그리고 **실행 의미론**: 컴파일된 워크플로 산출물을 스텁 호스트에서 실제로 실행합니다. "abandoned가 비어 있지 않으면 completed는 false" 같은 주장이 단언이 아니라 시연됩니다. 배포 동기화 게이트는 런타임 파일 8개를 설치된 스킬 사본과 바이트 대조해서, 저장소와 배포본이 조용히 어긋나는 걸 막습니다.
-- **[run.selftest.mjs](tools/run.selftest.mjs) (36건)** — 러너의 거부 방어벽을, 방어벽의 존재를 증명하는 유일한 방법으로 테스트합니다: *가드를 지우면 스위트가 빨개져야 한다.* 각 테스트는 금지된 상황(프론티어 밖 start, 측정 없는 done, 그래프 고치고 계속, 원장 조작)을 구성하고, 러너가 거부해야만 통과합니다.
-- **[install.selftest.mjs](tools/install.selftest.mjs) (15건)** — 설치자의 경계를 같은 방법으로: `--yes` 없이 쓰기 금지, 전역 거부, 낡은 명세 거부, 남의 훅 보존, 멱등 재설치, 그리고 게이트의 미달·STALE 차단(exit 2). 15건 중 3건은 공격 시나리오다: 승인 *뒤에* `build/hooks.json` 을 바꿔치기한다 — check 를 악성 명령으로 교체하고, 그래프째 말이 되게 재생성까지 해본다 — 게이트가 **아무것도 실행하지 않고** 차단해야만 통과한다(심어둔 명령이 안 돌았음을 마커 파일로 증명).
+- **[test.mjs](tools/test.mjs) (93건)** — 스키마와 컴파일러 동작, 그리고 **실행 의미론**: 컴파일된 워크플로 산출물을 스텁 호스트에서 실제로 실행합니다. "abandoned가 비어 있지 않으면 completed는 false" 같은 주장이 단언이 아니라 시연됩니다. 여기 새로 실린 것이 **지문 변별력**입니다 — 같은 저장소를 두 번 스캐폴드하면 바이트까지 같은 지문이 나와야 하고, 다른 저장소 둘에서는 달라야 합니다. 실제 scaffold 실행으로 실측하며, 지문의 변별력은 이 테스트들 전까지 *미검증* 주장이었습니다. 배포 동기화 게이트는 런타임 파일 9개를 설치된 스킬 사본과 바이트 대조해서, 저장소와 배포본이 조용히 어긋나는 걸 막습니다.
+- **[run.selftest.mjs](tools/run.selftest.mjs) (41건)** — 러너의 거부 방어벽을, 방어벽의 존재를 증명하는 유일한 방법으로 테스트합니다: *가드를 지우면 스위트가 빨개져야 한다.* 각 테스트는 금지된 상황(프론티어 밖 start, 측정 없는 done, 그래프 고치고 계속)을 구성하고, 러너가 거부해야만 통과합니다. 원장 체인 테스트는 진짜 원장을 공격합니다 — 과거 측정을 수정하고, 꼬리를 절단하고, 체인을 우회해 덧붙입니다 — 그리고 모든 명령이 거부해야만 통과합니다.
+- **[install.selftest.mjs](tools/install.selftest.mjs) (24건)** — 설치자의 경계를 같은 방법으로: `--yes` 없이 쓰기 금지, 전역 거부, 낡은 명세 거부, 남의 훅 보존, 멱등 재설치, 그리고 게이트의 미달·STALE 차단(exit 2). 3건은 TOCTOU 공격 시나리오다: 승인 *뒤에* `build/hooks.json` 을 바꿔치기한다 — check 를 악성 명령으로 교체하고, 그래프째 말이 되게 재생성까지 해본다 — 게이트가 **아무것도 실행하지 않고** 차단해야만 통과한다(심어둔 명령이 안 돌았음을 마커 파일로 증명). 나머지는 프로브 방어벽(실패할 수 없는 오라클은 장식으로 보고 거부한다), `--status`가 쓰지 않고 읽기만 하는 것, 그리고 기본 언어가 실제로 영어라는 것을 고정한다.
 
 CI는 ubuntu와 windows에서 두 스위트를 다 돌립니다. 줄바꿈은 [.gitattributes](.gitattributes)로 LF에 고정했습니다 — G0b가 바이트 단위 오라클이라, CRLF 체크아웃은 엄밀히 다른 문서이기 때문입니다.
 
 ## 저장소 지도
 
 ```
-SKILL.md                 스킬 진입점 — 절차와 규율
+SKILL.md / SKILL.ko.md   스킬 진입점 — 절차와 규율 (en / ko)
 graph.json / graph.md    자기적용 그래프 (정본은 JSON, md는 렌더 산출물)
 tools/
   scaffold.mjs           저장소 실측 → 초록 골격 생성
@@ -481,21 +518,25 @@ tools/
   validate.mjs           G0 전수 + 정적 검사 6종 + 스키마 버저닝
   render.mjs             JSON → 마크다운 (--check = 바이트 단위 오라클)
   compile.mjs            IR → 워크플로 스크립트 + hooks.json (LLM을 부르지 않음)
-  run.mjs                러너 — 프론티어, 측정 원장, 게이트 판정
+  run.mjs                러너 — 프론티어, 해시 체인 원장, 게이트 판정
+  i18n.mjs               이중 언어 메시지 (기본 영어, AVALON_LANG=ko) — 산출물은 항상 영어
   install-hooks.mjs      승인 게이트 훅 설치자 (프로젝트 settings 한정)
   hooks-gate.mjs         Stop 훅 집행자 — 빨간 게이트는 턴 종료를 차단
-  test.mjs               스키마·컴파일러·실행 의미론 테스트 (88건)
-  run.selftest.mjs       러너 자기시험 — "가드를 지우면 빨개지는가" (36건)
-  install.selftest.mjs   설치자·게이트 자기시험 — 승인·범위·변조 방어벽 (15건)
+  fixtures/              커밋된 고장 입력 — 프로브가 겨누는 것
+  test.mjs               스키마·컴파일러·실행 의미론·지문 테스트 (93건)
+  run.selftest.mjs       러너 자기시험 — "가드를 지우면 빨개지는가" (41건)
+  install.selftest.mjs   설치자·게이트 자기시험 — 승인·프로브·변조 방어벽 (24건)
 docs/graph/              설계 이력, IR 명세, 위 흉터 기록의 원본
 images/                  이 README의 다이어그램들
 ```
 
 ## 정직한 한계
 
-- 도구가 증명하는 건 **선언된 오라클**뿐입니다. check 명령이 게이트 제목과 같은 뜻인지는 여전히 사람이 봐야 합니다.
+- 도구가 증명하는 건 **선언된 오라클**뿐입니다. check 명령이 게이트 제목과 같은 뜻인지는 여전히 사람이 봐야 합니다. 프로브가 이 간극을 좁히지만(오라클이 실패할 *수 있다*는 것까지는 증명합니다) 닫지는 못합니다 — 결정적 도구로는 닫을 수 없습니다.
 - `build/hooks.json`은 명세입니다. `install-hooks.mjs --yes`(사람 승인 단계)로 설치되기 전까지는 아무것도 차단하지 않습니다.
 - 에이전트 노드가 런타임에 만드는 산출물은 컴파일 시점에 대조할 수 없습니다.
+- 원장 체인은 변조 *증거(tamper-evident)*이지 변조 *불가(tamper-proof)*가 아닙니다: 수정·삭제·절단은 잡지만, 원장과 상태를 함께 고쳐 쓰는 자는 못 잡습니다. 그걸 잡을 외부 앵커는 ④ ARCHIVE의 몫이고, ④는 여전히 휴면입니다.
+- 도구 메시지는 기본 영어입니다(`AVALON_LANG=ko`로 한국어). 코드 주석과 [docs/graph/](docs/graph/)의 설계 이력은 한국어입니다.
 
 전체 목록은 자기적용 그래프의 `guarantees` 블록에 있습니다.
 

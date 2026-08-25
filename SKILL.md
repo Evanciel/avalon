@@ -1,45 +1,51 @@
 ---
 name: avalon
-description: 작업을 그래프로 선언해서 진행한다 — 실측 → IR → 검증 → 무손실 컴파일 → 숫자 게이트 집행. 파일 4개 이상·여러 모듈·비가역 단계가 섞인 작업, 자율 루프로 돌릴 작업, "아발론 진행"·"그래프로 가자"·"avalon" 신호에 사용. 한두 파일 수정에는 쓰지 않는다.
+description: Declare work as a graph and enforce it — measure → IR → validate → lossless compile → numeric gate enforcement. For work spanning 4+ files, multiple modules, or irreversible steps, and for autonomous loops. Trigger on "avalon", "graph it", "아발론 진행", "그래프로 가자". Not for one-or-two-file edits.
 ---
 
-# Avalon — 그래프로 선언하고 집행한다
+# Avalon — declare as a graph, enforce by machine
 
-즉흥 착수 대신, **무엇을 언제 어떤 근거로 판정할지 먼저 못 박고** 시작한다.
-도구는 전부 결정적이다 — LLM을 호출하지 않는다(INV-1). 판단은 사람과 모델이 하고, 판정은 도구가 한다.
+Instead of improvising, **pin down what will be judged, when, and on what evidence** before starting.
+Every tool is deterministic — none of them calls an LLM (INV-1). People and models exercise judgment;
+tools deliver verdicts.
 
-## 언제 쓰나
+한국어 판: [SKILL.ko.md](SKILL.ko.md) · Tool messages default to English; set `AVALON_LANG=ko` for Korean.
 
-- 파일 4개 이상 · 여러 모듈 · 되돌리기 어려운 단계가 섞인 작업
-- 자율 루프로 돌릴 작업 — 판정 근거가 없으면 루프가 스스로를 속인다
+## When to use
 
-한두 파일 고치는 일에는 쓰지 않는다. 그래프 비용이 작업 비용보다 크면 본말전도다.
+- Work spanning 4+ files · multiple modules · steps that are hard to reverse
+- Anything run as an autonomous loop — without grounds for verdicts, a loop fools itself
 
-## 절차
+Not for one-or-two-file fixes. If the graph costs more than the work, that is the tail wagging the dog.
 
-### 1. 골격 — 기계가 실측한다
+## Procedure
+
+### 1. Skeleton — the machine measures
 
 ```bash
-node tools/scaffold.mjs <대상경로> "<과제 한 줄>" graph.json
+node tools/scaffold.mjs <target-path> "<task in one line>" graph.json
 ```
 
-저장소를 실측해 스택·규모·표식(fingerprint)을 채우고, 해시를 찍고, **G0를 통과하는** 골격을 낸다.
-초록에서 시작해 초록을 유지하며 내용을 바꾼다. 빨강에서 시작하지 않는다.
+Measures the repository (stack, scale, markers), stamps hashes, and emits a skeleton that
+**already passes G0**. Start green, stay green while replacing content. Never start red.
 
-### 2. 설계 — 판단이 필요한 부분
+### 2. Design — where judgment enters
 
-골격의 `TODO:`를 실제 설계로 바꾼다. 노드가 무엇인지, 게이트가 **무엇을 어떻게 재는지**는
-판단이라 기계가 못 한다. 지켜야 할 것:
+Replace the skeleton's `TODO:` items with the real design. What the nodes are and what each gate
+**measures and how** is judgment — the machine cannot do it. Rules to keep:
 
-- **DEFINED — NOT GUESSED.** 지문의 표식은 이 저장소에서 직접 잰 값이어야 한다.
-- **게이트는 숫자다.** 서술형 게이트는 스키마가 표현 자체를 거부한다. `threshold_source`에
-  그 숫자가 어디서 나왔는지 적는다 — 근거 없는 임계값은 장식이다.
-- **단위를 맞춘다.** `type: ratio`(0~1)에 임계값 90을 주면 영원히 통과하지 못한다. 실제로 있었던 버그다.
-- 되돌릴 수 없는 노드에는 `policy.requires_approval: true`를 단다. **산출 코드가 그 지점에서 실제로 멈춘다.**
-- 훅으로 강제할 게이트는 `host.enforced_by_hook`에 `{ "gate": "<id>", "check": "<명령>" }`으로
-  선언한다. check는 게이트 미달 시 exit≠0이어야 한다 — **기계 없는 선언은 hook_loss로 잡힌다.**
+- **DEFINED — NOT GUESSED.** Fingerprint markers must be values measured in this repository.
+- **Gates are numbers.** The schema refuses descriptive gates outright. Write `threshold_source`
+  for every threshold — an unsourced threshold is decoration.
+- **Match units.** `type: ratio` (0–1) with threshold 90 can never pass. This bug actually happened.
+- Put `policy.requires_approval: true` on irreversible nodes. **The compiled code actually stops there.**
+- Declare hook-enforced gates as `{ "gate": "<id>", "check": "<command>" }` in `host.enforced_by_hook`.
+  The check must exit non-zero when the gate is unmet — **a declaration without a machine is caught as hook_loss.**
+- Optionally add `"probe": "<command>"` to a hook entry — a command aimed at a known-bad state that
+  therefore MUST exit non-zero. It proves the check **can** fail; the installer refuses an oracle
+  that cannot (a check that never goes red enforces nothing).
 
-### 3. 재스탬프 → 검증 → 컴파일
+### 3. Restamp → validate → compile
 
 ```bash
 node tools/hash.mjs graph.json --write
@@ -47,80 +53,88 @@ node tools/validate.mjs graph.json
 node tools/compile.mjs graph.json build/graph.workflow.js
 ```
 
-**네 숫자를 확인한다.** 하나라도 안 맞으면 실행하지 않는다.
+**Check the four numbers.** If any is off, do not run.
 
-| | 통과 조건 | 뜻 |
+| | pass condition | meaning |
 |---|---|---|
-| `ir_field_coverage` | 1.00 | 필수 13필드가 다 찼다 |
-| `static_checks_passed` | 6/6 | 서술형 게이트·상태 밖 참조·비가역 무단실행·도달불가·무한루프·엣지 깨짐 없음 |
-| `gate_loss` | 0 | IR의 게이트가 산출 코드에 전부 실렸다 |
-| `hook_loss` | 0 | 훅 강제를 선언한 게이트가 전부 `build/hooks.json`에 실렸다 (선언 없으면 미표시) |
+| `ir_field_coverage` | 1.00 | all 13 required fields present |
+| `static_checks_passed` | 6/6 | no descriptive gates · out-of-state refs · unapproved irreversibles · unreachable nodes · unbounded loops · broken edges |
+| `gate_loss` | 0 | every IR gate landed in the compiled output |
+| `hook_loss` | 0 | every hook-declared gate landed in `build/hooks.json` (absent if none declared) |
 
-loss가 0이 아니면 **선언만 하고 강제하지 않는 상태**다. 그 그래프는 의미가 없다.
+Non-zero loss means **declared but not enforced**. Such a graph is meaningless.
 
-### 4. 집행 — 두 가지 경로
+### 4. Enforcement — two paths
 
-**A. Workflow 스크립트** (`build/graph.workflow.js`) — 에이전트 오케스트레이션 호스트에서 돈다.
-실행은 사용자 동의가 필요하다. 멈춘 지점부터 재개할 수 있다:
+**A. Workflow script** (`build/graph.workflow.js`) — runs on an agent-orchestration host.
+Execution needs user consent. Resumable from where it stopped:
 
 ```
 Workflow({ scriptPath: "build/graph.workflow.js",
-           args: { resume_from, resume_state, resume_loops, approved: ["<노드id>"] } })
+           args: { resume_from, resume_state, resume_loops, approved: ["<node-id>"] } })
 ```
 
-`policy.requires_approval` 노드는 `approved`에 id가 없으면 **실행 전에 멈춘다.**
-기본값은 빈 집합이다 — 게이트가 공허해지지 않도록 회귀 테스트가 고정한다.
+A `policy.requires_approval` node **stops before executing** unless its id is in `approved`.
+The default is the empty set — a regression test pins this so the gate can't hollow out.
 
-**B. 러너** (`tools/run.mjs`) — 세션이 직접 노드를 도는 경우의 집행자.
+**B. Runner** (`tools/run.mjs`) — the enforcer when a session works the nodes directly.
 
 ```bash
-node tools/run.mjs graph.json init      # 상태 생성 (그래프 수정 후에는 init --force)
-node tools/run.mjs graph.json next      # 지금 할 수 있는 것
+node tools/run.mjs graph.json init      # create state (after editing the graph: init --force)
+node tools/run.mjs graph.json next      # what can be done right now
 node tools/run.mjs graph.json start <node>
-node tools/run.mjs graph.json measure <field> <value> [메모]
-node tools/run.mjs graph.json done <node>   # 게이트 판정은 도구만 내린다
+node tools/run.mjs graph.json measure <field> <value> [note]
+node tools/run.mjs graph.json done <node>   # only the tool delivers gate verdicts
+node tools/run.mjs graph.json verify    # ledger hash-chain check (tamper/truncation)
 ```
 
-사람/에이전트는 **측정값만** 넣는다. 프론티어 밖 노드는 start가 거부되고, 이번 방문에 안 잰
-필드는 done이 거부되며, 모든 측정은 원장에 append-only로 남는다. 그래프 해시가 바뀌면
-상태가 STALE로 표시된다 — 조용히 이어가지 않는다.
+People/agents enter **measurements only**. Starting an out-of-frontier node is refused; `done`
+is refused if this visit didn't measure; every measurement lands append-only in the ledger.
+Ledger lines are **hash-chained** (`h`/`prev` + `ledger_head` in state) — editing, deleting, or
+reordering past lines makes every command refuse. If the graph hash changes, state is marked
+STALE — nothing continues silently.
 
-## 완료 판정 — 포기는 성공이 아니다
+## Completion — abandonment is not success
 
-산출 코드의 `completed`는 **`abandoned`가 비어 있을 때만 true**다.
+`completed` in compiled output is true **only while `abandoned` is empty**.
 
-- `on_exhaust: partial`로 지나간 게이트 미달은 `abandoned[]`에
-  `{gate, node, field, op, threshold, measured, attempts}` 실측 증거로 남는다.
-- `fail`/`halt` 소진도 같은 증거를 싣고 `completed: false`로 멈춘다.
-- **부분 산출은 완료가 아니다.** abandoned가 있는 완주를 성공으로 보고하지 마라.
+- A gate missed under `on_exhaust: partial` leaves measured evidence in `abandoned[]`:
+  `{gate, node, field, op, threshold, measured, attempts}`.
+- `fail`/`halt` exhaustion carries the same evidence and stops with `completed: false`.
+- **Partial output is not completion.** Never report a run with non-empty abandoned as success.
 
-## 훅 — 산출과 설치는 다른 단계다
+## Hooks — emitting and installing are separate steps
 
-컴파일은 `build/hooks.json` **명세까지만** 낸다 (게이트별 check 명령 + exit 계약).
-설치는 별도 도구가, 별도 승인 아래 한다:
+Compile emits **only the spec**, `build/hooks.json` (per-gate check commands + exit contract).
+Installation is a separate tool under separate approval:
 
 ```bash
-node tools/install-hooks.mjs graph.json build/hooks.json          # 계획만 보여주고 exit 3
-node tools/install-hooks.mjs graph.json build/hooks.json --yes    # 사용자 승인 후에만
+node tools/install-hooks.mjs graph.json build/hooks.json          # plan only, exit 3
+node tools/install-hooks.mjs graph.json build/hooks.json --yes    # only after user approval
+node tools/install-hooks.mjs graph.json build/hooks.json --status # read-only diagnosis
 ```
 
-설치자가 지키는 경계 (install.selftest.mjs 15건이 고정):
-- `--yes` 없이는 아무것도 쓰지 않는다. **에이전트가 사용자 승인 없이 --yes 를 붙이는 것은 금지다.**
-- 프로젝트 `.claude/settings.json` 에만 쓴다 — 전역(`~/.claude`)은 `--yes` 여도 거부.
-- 낡은 명세(spec_hash 불일치)는 거부. 남의 훅 항목은 보존. 재설치는 멱등. `--uninstall` 제공.
-- 승인 시점 명세의 바이트 해시를 설치 명령에 박제(--approved) — 이후 hooks.json 이 어떻게 바뀌든 게이트는 <실행 없이> 차단한다. 재승인 전에는 새 check 가 돌 수 없다.
+Boundaries the installer keeps (pinned by install.selftest.mjs):
+- Writes nothing without `--yes`. **An agent adding --yes without user approval is forbidden.**
+- Project `.claude/settings.json` only — global (`~/.claude`) refused even with `--yes`.
+- Stale specs refused. Other people's hook entries preserved. Reinstall is idempotent. `--uninstall` provided.
+- The byte hash of the approved spec is pinned into the installed command (`--approved`) — however
+  hooks.json changes afterwards, the gate blocks **without executing**. No new check runs before re-approval.
+- Declared probes must exit non-zero at install time — an oracle that cannot fail is refused as decoration.
 
-설치되면 `hooks-gate.mjs` 가 Stop 훅으로 돌며, 게이트 미달 시 exit 2 로 세션 종료를 차단한다.
-그래프가 바뀌면 게이트는 STALE 을 **통과가 아니라 차단**으로 처리한다 — 재컴파일 → 재설치가 해소 경로다.
-설치 전까지 명세는 아무것도 차단하지 않는다 — 이 한계를 완료 보고에 그대로 쓴다.
+Once installed, `hooks-gate.mjs` runs as a Stop hook and blocks turn end with exit 2 while a gate
+is red. If the graph changes, the gate treats STALE as a **block, not a pass** — recompile →
+reinstall is the resolution path. Until installed, the spec blocks nothing — completion reports
+must say so in those words.
 
-## 보장 범위를 항상 쓴다
+## Always write the guarantee boundary
 
-그래프에는 `guarantees.provides / excludes`를 채운다. 도구가 증명하는 것은 **선언된 오라클**뿐이다 —
-check가 게이트의 한국어 제목과 같은 뜻인지는 증명하지 못한다. 재지 않은 것을 잰 것처럼 쓰지 마라.
+Fill `guarantees.provides / excludes`. What the tools prove is **the declared oracle only** —
+they cannot prove a check means the same as its gate's title. A probe narrows this gap (it proves
+the oracle can fail) but does not close it. Never present the unmeasured as measured.
 
-## 검증
+## Verification
 
 ```bash
-npm test   # tools/test.mjs (스키마·컴파일러·실행 의미론) + tools/run.selftest.mjs (러너 거부 방어벽)
+npm test   # tools/test.mjs (schema·compiler·execution semantics) + run.selftest.mjs (runner refusal walls) + install.selftest.mjs (installer/gate walls)
 ```

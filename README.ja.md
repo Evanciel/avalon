@@ -5,7 +5,7 @@
 **AIエージェントのためのグラフエンジニアリング — 完全なハーネスと、自分を騙せないループ。**<br/>
 作業を始める前に合格条件を数字で固定し、判定はAIではなくツールが下します。
 
-[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-139%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-158%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · [한국어](README.ko.md) · **日本語** · [简体中文](README.zh.md)
 
@@ -94,7 +94,7 @@ Avalonは4つのステージとして設計されており、このリポジト�
 
 ```bash
 git clone https://github.com/Evanciel/avalon && cd avalon
-npm test        # テスト139件、依存関係0、Node 18+
+npm test        # テスト158件、依存関係0、Node 18+
 ```
 
 **Claude Codeのスキル**として使うには、スキルディレクトリにクローンするだけです — [SKILL.md](SKILL.md)のfrontmatter(`name: avalon`)が登録を担います:
@@ -140,6 +140,7 @@ node tools/run.mjs graph.json status          # 全体像 + まだ回ってい�
 node tools/run.mjs graph.json start <ノード>  # フロンティア外なら拒否
 node tools/run.mjs graph.json measure <フィールド> <値> [メモ]
 node tools/run.mjs graph.json done <ノード>   # 合否を決めるのはツール、あなたではない
+node tools/run.mjs graph.json verify          # 台帳ハッシュチェーン検証(改竄・切り詰め)
 node tools/run.mjs graph.json abort           # 進行中ノードの取り消し
 node tools/run.mjs graph.json lint            # ORの罠検査(1ノードにゲート2個以上)
 ```
@@ -154,7 +155,9 @@ node tools/run.mjs graph.json lint            # ORの罠検査(1ノードにゲ�
 | `init` 後にグラフを直して続行 | **STALE** 表示 — 状態は自分がどのグラフハッシュから生まれたか覚えている |
 | ゲートを `max_retry` 回より多く失敗 | **停止** — 実行が止まり、決定が人間に渡る |
 
-受理された測定はすべて台帳に追記されます。台帳は決して書き換えられず、`init --force` も状態を捨てるだけで台帳は残します。
+受理された測定はすべて台帳に追記されます。台帳は決して書き換えられず、`init --force` も状態を捨てるだけで台帳は残します。そして台帳は自分自身を守ります: すべての行が直前の行と**ハッシュチェーン**(`h`/`prev`)で結ばれ、状態ファイルがチェーンの先頭を固定します。過去の項目を書き換え・削除・並べ替えれば、人間が確認するまで全コマンドが拒否します。
+
+ツールのメッセージは既定で英語です(`AVALON_LANG=ko` で韓国語。日本語は未対応です)。ビルド成果物は常に英語です — バイトがハッシュされるため、環境に依存してはならないからです。
 
 ## 実際にはこう見える
 
@@ -225,7 +228,7 @@ https://github.com/Evanciel/avalon をクローンして SKILL.md を読み、
 
 ## チュートリアル: 実際に1回回す
 
-以下はすべて実際に起きたことです — コマンドと出力はライブセッションからそのまま、失敗も含めて。(ツールのメッセージは現在韓国語です。訳を添えています。)
+以下はすべて実際に起きたことです — コマンドと出力はライブセッションからそのまま、失敗も含めて。(以下の出力は韓国語メッセージ時代に採取したものです — ツールは現在既定で英語になり、`AVALON_LANG=ko` で韓国語になります。訳を添えています。)
 
 小さなNodeプロジェクト `my-api` があり、エージェントに検索エンドポイントを追加してテストを通させたいとします。
 
@@ -408,11 +411,45 @@ IRからワークフロースクリプトへの純関数です。内部では非
 
 フロンティア規律、測定台帳、ゲート判定、STALE検知、停止時の人間への引き渡し。[回し方は3通り](#回し方は3通り)で説明した通りです。ファイル冒頭の不変条件4つが契約であり、自己試験はその1つ1つが実際に噛みつくことを証明するために存在します。
 
+台帳は**ハッシュチェーン**です: 各行が `h = sha256(canonical(line))` と直前の行の `h` を併せ持ち、状態ファイルがチェーンの先頭を固定します。以下は、記録済みの測定値7が後から1に書き換えられたときに実際に起きたことです — `verify` だけでなく全コマンドが拒否します:
+
+```text
+$ node tools/run.mjs graph.json next
+🔴 ledger chain broken — refusing every command:
+  line 3: h mismatch — the line was edited
+  the ledger is the evidence layer; a run on tampered evidence proves nothing.
+  → inspect the ledger, archive it elsewhere, remove it, then re-init
+```
+
+(台帳チェーンが壊れた — 全コマンドを拒否。3行目のhが不一致 = 行が書き換えられた。)
+
+1つ注意点があり、チェーンが住むコードにも明記してあります: これは改竄の*証拠(tamper-evident)*であって、改竄の*不可能化(tamper-proof)*ではありません。書き換え・削除・並べ替え・切り詰めは捕まえますが、台帳と状態ファイルを*一緒に整合的に*書き換える者には届きません — それには外部アンカーが必要で、それこそが休眠中の④ARCHIVEに予約された仕事です。
+
 ### `install-hooks.mjs` + `hooks-gate.mjs` — セッションを超える強制
 
 インストーラは `build/hooks.json` を**プロジェクトの** `.claude/settings.json` にStopフックとして配線します。要点はその境界です: `--yes` なしには何も書かない(計画だけ見せてexit 3 — エージェントがユーザーの了承なしに `--yes` を付けるのは禁止)、グローバルの `~/.claude` settingsは `--yes` があっても拒否、ハッシュが現在のグラフと合わない古い仕様は拒否、他人のフック項目は保存、再インストールは冪等。`--uninstall --yes` でいつでも外せます。
 
 さらに**承認したものそれ自体を刻印します**: 承認時点の `build/hooks.json` のバイトハッシュが、インストールされる命令にそのまま埋め込まれます(`--approved sha256:…`)。以後ファイルがどんな形で変わっても、ゲートは**checkを1つも実行する前に** TAMPERED としてブロックします — これがなければ、JSONファイル1つへの書き込み権限が、毎ターン終了時に任意の命令を自動実行させる権限と等しくなってしまいます。戻る道は再承認(`--yes` 再インストール)だけです。
+
+さらに、各checkが**赤くなれる**ことの証明も要求します。フック項目には `probe` を宣言できます — 同じオラクルを既知の壊れた入力に向けたもので、したがって必ずexit非ゼロでなければなりません。インストーラはplan時とインストール時に宣言済みプローブを全部回します。exit 0 のプローブは「失敗できないcheck」をその場で実証したことになり、インストールは拒否されます:
+
+```text
+$ node tools/install-hooks.mjs graph.json build/hooks.json --yes
+installer refused: probe refuted nothing — these checks cannot fail (or the probe never finished), so they enforce nothing:
+  G1: probe exit 0 ← node -e "process.exit(0)"
+```
+
+(インストーラ拒否: プローブが何も反証しなかった — このcheckは失敗できず、何も強制しない。)
+
+健全な計画はゲートごとに反対証拠を印字します:
+
+```text
+  probe   G0  exit 1 ✅ (the oracle can fail)
+  probe   G0b  exit 1 ✅ (the oracle can fail)
+  probe   G4c  exit 1 ✅ (the oracle can fail)
+```
+
+プローブの無いフックもインストールは通ります(「未証明」と報告されるだけで、遡及破壊はありません)。そして `--status` はいつでも読み取り専用の診断を返します: インストール有無、承認ピンが無事かTAMPEREDか、仕様が最新かSTALEか — checkを1つも実行せずに。
 
 インストール後は、セッションがターンを終えようとするたびに `hooks-gate.mjs` が宣言済みcheckを全部回します: 全部通過 → exit 0、1つでも未達 → exit 2で終了をブロックし、未達ゲートをモデルに返します。グラフが変わればSTALEを報告してブロック — 昨日のルールを黙って強制するより、止まるほうが正直です。
 
@@ -452,26 +489,28 @@ IRからワークフロースクリプトへの純関数です。内部では非
 
 `compile.mjs` は `build/hooks.json` — ゲートごとのcheckコマンド + exitコード契約 — までしか出さず、そこで止まるのが意図です。インストールは別のツールが別の承認の下で行います: `install-hooks.mjs` は計画を見せ、人間が確認した `--yes` までは何も書かず、プロジェクトのsettingsにのみ(グローバル禁止)インストールし、インストールと同じ手軽さでアンインストールできます。自動インストールは今も禁止です。自分をセッションの強制レイヤーに黙って組み込むツールこそ、このプロジェクトが防ぐために存在する種類の説明不能な魔法だからです。インストールされるまで仕様は何もブロックしません — そして完了報告にはこの文をそのまま書くことが求められます。
 
+Avalon自身の3つのフックにもすべてプローブが付いています: 各checkはコミット済みの壊れたフィクスチャ([tools/fixtures/](tools/fixtures/))にも向けられ、それを拒否しなければならないので、このリポジトリの強制レイヤーは「赤くなれる」ことが証明済みです。
+
 ## AvalonはAvalonの上で回る
 
-リポジトリルートの [graph.json](graph.json) はサンプルではありません — Avalon自身の開発をAvalonが管理するグラフです。ノード7個(`frontend → validate → render_check → backend → compile_check → human_go → install_hooks`)、宣言済み状態フィールド6個、そしてゲート3個(G0・G0b・G4c)が `host.enforced_by_hook` で機械強制されます — それぞれ実際に検査するコマンド付きで。[graph.md](graph.md) はそのレンダリングで、G0bがバイト単位で検証します。
+リポジトリルートの [graph.json](graph.json) はサンプルではありません — Avalon自身の開発をAvalonが管理するグラフです。ノード7個(`frontend → validate → render_check → backend → compile_check → human_go → install_hooks`)、宣言済み状態フィールド6個、そしてゲート3個(G0・G0b・G4c)が `host.enforced_by_hook` で機械強制されます — それぞれ実際に検査するコマンドに加え、そのコマンドが失敗できることを証明するプローブ(コミット済みの壊れたフィクスチャ狙い)付きで。[graph.md](graph.md) はそのレンダリングで、G0bがバイト単位で検証します。
 
 グラフの `guarantees` ブロックは、正直な限界リストの機械寄りの形です: `provides` は緑の実行が正確に何を証明するか、`excludes` は何を証明しないかを書きます。このリポジトリ自身のゲートが赤くなれば、CIが落ちます。
 
 ## どうテストしているか
 
-`npm test` 1つで回る3つのスイート、合計139件:
+`npm test` 1つで回る3つのスイート、合計158件:
 
-- **[test.mjs](tools/test.mjs) (88件)** — スキーマとコンパイラの挙動、そして**実行意味論**: コンパイルされたワークフロー出力をスタブホストで実際に実行します。「abandonedが空でなければcompletedはfalse」のような主張が、断言ではなく実演されます。デプロイ同期ゲートはランタイムファイル8個をインストール済みスキルのコピーとバイト照合し、リポジトリと配備物が静かにずれるのを防ぎます。
-- **[run.selftest.mjs](tools/run.selftest.mjs) (36件)** — ランナーの拒否の壁を、壁の存在を証明する唯一の方法でテストします: *ガードを消せばスイートが赤くならなければならない。* 各テストは禁止された状況(フロンティア外のstart、測定なしのdone、グラフを直して続行、台帳の改竄)を構成し、ランナーが拒否したときだけ通ります。
-- **[install.selftest.mjs](tools/install.selftest.mjs) (15件)** — インストーラの境界を同じ方法で: `--yes` なしの書き込み禁止、グローバル拒否、古い仕様の拒否、他人のフック保存、冪等な再インストール、そしてゲートの未達・STALEブロック(exit 2)。15件のうち3件は攻撃シナリオです: 承認の*後で* `build/hooks.json` を書き換え — checkを悪意ある命令に差し替え、グラフごと整合的に再生成までして — ゲートが**何も実行せずに**ブロックしたときだけ通ります(仕込んだ命令が走らなかったことをマーカーファイルで証明)。
+- **[test.mjs](tools/test.mjs) (93件)** — スキーマとコンパイラの挙動、そして**実行意味論**: コンパイルされたワークフロー出力をスタブホストで実際に実行します。「abandonedが空でなければcompletedはfalse」のような主張が、断言ではなく実演されます。新顔は**指紋の弁別力**です — 同じリポジトリを2回実測すればバイトまで同じ指紋、別のリポジトリなら別の指紋にならなければなりません。実際のscaffold実行で測ります。指紋の弁別力は、このテストまで*未検証*の主張でした。デプロイ同期ゲートはランタイムファイル9個をインストール済みスキルのコピーとバイト照合し、リポジトリと配備物が静かにずれるのを防ぎます。
+- **[run.selftest.mjs](tools/run.selftest.mjs) (41件)** — ランナーの拒否の壁を、壁の存在を証明する唯一の方法でテストします: *ガードを消せばスイートが赤くならなければならない。* 各テストは禁止された状況(フロンティア外のstart、測定なしのdone、グラフを直して続行)を構成し、ランナーが拒否したときだけ通ります。台帳チェーンのテストは本物の台帳を攻撃します — 過去の測定値を書き換え、末尾を切り詰め、チェーンを迂回して追記します — そして全コマンドが拒否して初めて通ります。
+- **[install.selftest.mjs](tools/install.selftest.mjs) (24件)** — インストーラの境界を同じ方法で: `--yes` なしの書き込み禁止、グローバル拒否、古い仕様の拒否、他人のフック保存、冪等な再インストール、そしてゲートの未達・STALEブロック(exit 2)。3件はTOCTOU攻撃シナリオです: 承認の*後で* `build/hooks.json` を書き換え — checkを悪意ある命令に差し替え、グラフごと整合的に再生成までして — ゲートが**何も実行せずに**ブロックしたときだけ通ります(仕込んだ命令が走らなかったことをマーカーファイルで証明)。残りはプローブの壁(失敗できないオラクルは飾りとして拒否)、`--status` が書かずに読むだけであること、そして既定言語が本当に英語であることを固定します。
 
 CIはubuntuとwindowsで両スイートを回します。改行は [.gitattributes](.gitattributes) でLFに固定しています — G0bはバイト単位のオラクルなので、CRLFのチェックアウトは厳密には別の文書だからです。
 
 ## リポジトリの地図
 
 ```
-SKILL.md                 スキルの入口 — 手順と規律
+SKILL.md / SKILL.ko.md   スキルの入口 — 手順と規律 (en / ko)
 graph.json / graph.md    自己適用グラフ(JSONが正本、mdはレンダー出力)
 tools/
   scaffold.mjs           リポジトリを実測 → 緑のスケルトン生成
@@ -479,22 +518,25 @@ tools/
   validate.mjs           G0全数 + 静的検査6種 + スキーマバージョニング
   render.mjs             JSON → markdown (--checkはバイト単位のオラクル)
   compile.mjs            IR → ワークフロースクリプト + hooks.json (LLMを呼ばない)
-  run.mjs                ランナー — フロンティア、測定台帳、ゲート判定
+  run.mjs                ランナー — フロンティア、ハッシュチェーン台帳、ゲート判定
+  i18n.mjs               二言語メッセージ (既定は英語、AVALON_LANG=ko) — 成果物は常に英語
   install-hooks.mjs      承認ゲート付きフックインストーラ (プロジェクトsettings限定)
   hooks-gate.mjs         Stopフック実行者 — 赤いゲートはターン終了をブロック
-  test.mjs               スキーマ・コンパイラ・実行意味論テスト (88件)
-  run.selftest.mjs       ランナー自己試験 — 「ガードを消したら赤くなるか」(36件)
-  install.selftest.mjs   インストーラ・ゲート自己試験 — 承認・範囲・改竄の壁 (15件)
+  fixtures/              コミット済みの壊れた入力 — プローブが狙う先
+  test.mjs               スキーマ・コンパイラ・実行意味論・指紋テスト (93件)
+  run.selftest.mjs       ランナー自己試験 — 「ガードを消したら赤くなるか」(41件)
+  install.selftest.mjs   インストーラ・ゲート自己試験 — 承認・プローブ・改竄の壁 (24件)
 docs/graph/              設計史、IR仕様、上の傷跡の原本
 images/                  このREADMEの図
 ```
 
 ## 正直な限界
 
-- ツールが証明するのは**宣言されたオラクル**だけです。checkコマンドがゲートの題名と同じ意味かどうかは、いまも人間が見る必要があります。
+- ツールが証明するのは**宣言されたオラクル**だけです。checkコマンドがゲートの題名と同じ意味かどうかは、いまも人間が見る必要があります。プローブはこの隙間を狭めます(オラクルが失敗*できる*ことまでは証明します)が、閉じはしません — 決定的ツールには閉じられません。
 - `build/hooks.json` は仕様です。`install-hooks.mjs --yes`(人間承認のステップ)でインストールされるまで何もブロックしません。
 - エージェントノードが実行時に作る成果物は、コンパイル時に照合できません。
-- ツールのメッセージは現在韓国語です。exitコードとJSON出力は言語に依存しませんが、文章はまだです。
+- 台帳チェーンは改竄の*証拠(tamper-evident)*であって*不可能化(tamper-proof)*ではありません: 書き換え・削除・切り詰めは捕まえますが、台帳と状態を一緒に書き換える者は捕まえられません。それを捕まえる外部アンカーは④ARCHIVEの仕事で、④は休眠中です。
+- ツールのメッセージは既定で英語です(`AVALON_LANG=ko` で韓国語。日本語は未対応)。コードのコメントと [docs/graph/](docs/graph/) の設計史は韓国語のままです。
 
 完全な最新リストは自己適用グラフの `guarantees` ブロックにあります。
 

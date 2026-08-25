@@ -1,0 +1,14 @@
+{
+  "//": "probe fixture — validate.mjs MUST exit non-zero on this file. If it ever passes, the oracle is decoration.",
+  "graph": {
+    "spec": {
+      "version": "1.4.0",
+      "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "entry": "ghost"
+  },
+  "nodes": [],
+  "edges": [],
+  "gates": [],
+  "state": []
+}
