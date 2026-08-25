@@ -2,7 +2,7 @@
 
 <img src="images/banner.svg" alt="Avalon — declare the graph, let the numbers judge" width="100%" />
 
-**Graph engineering for AI agents — a complete harness, and loops that can't fool themselves.**<br/>
+**An AI agent's "done" is an opinion. Avalon turns it into a measurement.**<br/>
 Pin the pass conditions as numbers before the work starts. Let tools, not the AI, do the judging.
 
 [![npm](https://img.shields.io/npm/v/avalon-skill?color=cb3837&logo=npm)](https://www.npmjs.com/package/avalon-skill) [![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-158%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -11,56 +11,196 @@ Pin the pass conditions as numbers before the work starts. Let tools, not the AI
 
 </div>
 
-- [The problem](#the-problem)
-- [Who this is for](#who-this-is-for)
-- [What's in the harness](#whats-in-the-harness)
-- [The four stages](#the-four-stages)
-- [How a run flows](#how-a-run-flows)
-- [Install](#install)
-- [Three ways to run it](#three-ways-to-run-it)
-- [What it looks like in practice](#what-it-looks-like-in-practice)
-- [Tutorial: a real run](#tutorial-a-real-run)
-- [The graph format](#the-graph-format)
-- [Four numbers](#four-numbers)
-- [The tools, one by one](#the-tools-one-by-one)
-- [Where the rules came from](#where-the-rules-came-from)
-- [The paper trail](#the-paper-trail)
-- [Giving up is not succeeding](#giving-up-is-not-succeeding)
-- [Hooks: a spec is not an installation](#hooks-a-spec-is-not-an-installation)
-- [Avalon runs on Avalon](#avalon-runs-on-avalon)
+- [Why this exists](#why-this-exists)
+- [What Avalon does](#what-avalon-does)
+- [Start in three steps](#start-in-three-steps)
+- [What a run looks like](#what-a-run-looks-like)
+- [The guarantees](#the-guarantees)
+- [Under the hood](#under-the-hood) — [harness](#whats-in-the-harness) · [four stages](#the-four-stages) · [three ways to run](#three-ways-to-run-it) · [tutorial](#tutorial-a-real-run) · [graph format](#the-graph-format) · [tools](#the-tools-one-by-one) · [scars](#where-the-rules-came-from) · [paper trail](#the-paper-trail) · [self-applied](#avalon-runs-on-avalon)
 - [How it's tested](#how-its-tested)
 - [Repository map](#repository-map)
 - [Honest limits](#honest-limits)
 
-## The problem
+## Why this exists
 
-Give an AI agent a big task and at the end it says "done." The catch: the one saying it and the one checking it are the same AI. It's a student grading their own exam — gaps stay invisible.
+This project started with a small lie — the kind AI agents tell every day, without meaning to.
 
-It gets worse when you run agents in loops (overnight autonomous work, retry-until-green). Without a judging rule that lives outside the agent, the loop happily fools itself and keeps going.
+An agent had been handed a multi-step job and left to work. It planned well, worked hard, and reported back: **"done — everything passes."** It was convincing. It was also wrong. One step had quietly been given up on, one check had quietly been skipped, and nothing in the loop had any reason to mention either.
 
-Avalon flips the order. **Before** the work starts, you draw the plan as a graph: nodes are the work, edges are the order, and gates are pass conditions — **numbers only**. Then small tools do the judging. The tools never call an LLM, so the same graph always gets the same verdict.
+Nobody lied on purpose. The problem is structural: **the one doing the work and the one grading it are the same model.** A student grading their own exam doesn't need bad intent to hand out an A — and an agent running unattended overnight, retrying until things look green, will happily convince itself all night long.
 
 <img src="images/who-judges.svg" alt="Without Avalon the agent writes its own grade. With Avalon the agent submits measurements and a deterministic tool gives the verdict." width="100%" />
 
-The agent still does all the work — it just loses the right to grade itself.
+The fix is old and boring, which is why it works: **move the judging outside.** Before the work starts, the plan is drawn as a graph — nodes are the work, edges are the order, and gates are pass conditions written as **numbers only**. Small deterministic tools do the judging. They never call an LLM, so the same graph always gets the same verdict. The agent still does all the work; it just loses the right to grade itself.
 
-## Who this is for
+None of the rules in this repo were designed on a whiteboard. Each one exists because a real bug slipped through during this project's own development — five of them, each now a rule with a regression test standing on it:
 
-- **You hand agents big work.** Four-plus files, several modules, steps that are hard to undo. The bigger the task, the bigger the gap a "done" can hide.
-- **You run agents unattended.** Overnight loops, retry-until-green. Without a judge outside the agent, the loop fools itself until morning.
-- **You've been burned by "done".** Once is enough. For everyone who stopped trusting success reports without evidence.
+<img src="images/scars.svg" alt="Five real bugs became five rules: a check that could never fail, a measurement never used, agents compiled blind, approval silently dropped, a hook that never existed" width="100%" />
 
-Not for one-or-two-file edits — if drawing the plan costs more than the work, that's the tail wagging the dog.
+(The full stories are in [Where the rules came from](#where-the-rules-came-from). Even the project's original sales pitch didn't survive its own research phase — see [The paper trail](#the-paper-trail).)
 
-**What you get:**
+**Use Avalon when:** you hand agents big work (4+ files, hard-to-undo steps), you run agents unattended, or you've simply stopped trusting success reports without evidence. **Skip it** for one-or-two-file edits — if drawing the plan costs more than the work, that's the tail wagging the dog.
+
+## What Avalon does
+
+<img src="images/pipeline.svg" alt="1 scaffold measures the repo, 2 design is human judgment, 3 validate and compile check the four numbers, 4 run enforces order with an append-only ledger" width="100%" />
+
+Two of the four steps are machines, one is you (or the agent, with a machine holding veto power), and one is a machine watching the work happen. Step 2 — deciding what the nodes and gates should be — is the only place judgment enters. Everything around it is deterministic, which is the point: judgment gets recorded as numbers once, and after that no one gets to re-judge on vibes.
+
+Concretely, "gate" means a line like this — and *only* a line like this:
+
+```jsonc
+{ "field": "tests_failed", "op": "==", "threshold": 0 }
+```
+
+There is no place in the format to write "check if it looks good." Prose is not a pass condition.
+
+## Start in three steps
+
+<img src="images/three-steps.svg" alt="Three steps: install once, say one line in plain language, read the traffic lights at the end" width="100%" />
+
+### ① Install once
+
+```bash
+git clone https://github.com/Evanciel/avalon ~/.claude/skills/avalon
+```
+
+That's the whole install for Claude Code — [SKILL.md](SKILL.md) has the frontmatter (`name: avalon`) that registers the skill. Zero dependencies, Node 18+; the tools are standalone `.mjs` files you never have to run yourself. (The toolchain is also on npm — `npm i avalon-skill` — if you want the tools without the skill. To hack on the repo itself: `git clone https://github.com/Evanciel/avalon && cd avalon && npm test`.)
+
+### ② Say one line — in plain language
+
+You don't need to know what a "graph" or a "gate" is. Say the goal, and add "check it actually works":
+
+**Starting from scratch** — nothing exists yet:
+
+```text
+Run this under avalon — build a website for my café from scratch:
+a menu page, directions, and a contact form. Check that all three actually work.
+```
+
+**Adding to something you're already building** — open Claude Code in that project's folder and ask. The agent measures what's already there before touching anything:
+
+```text
+Run this under avalon — add a booking feature to the site I've been building.
+Check that a new booking actually shows up in the list.
+```
+
+**A change you're scared of:**
+
+```text
+Run this under avalon — fix the payment part. Ask me before anything that can't be undone.
+```
+
+**Leaving it overnight:**
+
+```text
+Run this under avalon — work through this list while I sleep.
+If a gate fails, stop — don't gloss over it.
+```
+
+Any phrasing works ("avalon으로 진행해", "use the avalon procedure", …) — the skill's trigger is the name. The numbers, gates, and graph are the agent's job to design; what it *must* do is show you the criteria **in plain words before starting** — "pressing send must increase stored messages by one; zero failed checks." You just say whether that's what *done* means to you.
+
+### ③ Read the lights
+
+At the end you get four numbers and two fields the agent cannot fake:
+
+- **Four greens** (`coverage 1.00 · checks 6/6 · gate_loss 0 · hook_loss 0`) — the plan was sound and nothing was lost in translation.
+- **`completed: true`** — every gate passed on real measurements.
+- **`abandoned: []`** — empty means nothing was given up on. Anything *in* that list means "this part didn't make it, and here's the evidence: what was measured, what the bar was, how many attempts."
+
+Your whole role, in three moves: read the criteria list before the run and say "yes, that's what done means" · answer when it asks *"this step can't be undone — proceed?"* · read the lights at the end.
+
+Things you will never touch: `graph.json` (the agent writes it), the commands (the agent runs them), the thresholds (the agent proposes them — you just say whether they match your idea of done).
+
+### Not just Claude
+
+Nothing in the harness is Claude-specific — the tools are plain Node CLIs, no API keys, no vendor calls. Point any agent that can run shell commands at the procedure:
+
+```text
+Clone https://github.com/Evanciel/avalon, read SKILL.md, and follow its
+procedure for this task: <your task here>
+```
+
+Every agent gets the same treatment: the validator vetoes its graph drafts, the runner refuses its shortcuts, and the compiled `completed` flag ignores its opinion. And with no AI at all, the runner CLI still works — as a disciplined checklist for humans.
+
+## What a run looks like
+
+<img src="images/where-it-sits.svg" alt="You give the agent a one-line goal, the agent works on the repo, and 'done' can only reach you through Avalon's gates" width="100%" />
+
+Avalon doesn't replace your AI agent — it sits between the agent's "done" and your trust. The agent keeps doing all the work; its claims just have to pass through gates on the way to you.
+
+From the one line you typed, with no further prompting:
+
+<img src="images/session-flow.svg" alt="A real session: one line from you, the agent measures and designs, tools give verdicts, a failing gate loops back, approval is requested at the irreversible step, and the final report says completed true, abandoned empty" width="100%" />
+
+1. The agent runs `scaffold`, drafts the graph, and shows you the four numbers before doing anything.
+2. It works node by node, submitting measurements; the tools answer pass or fail.
+3. At the irreversible node it stops and asks you — that pause is compiled into the output, not a courtesy.
+4. The final message carries `completed` and the `abandoned[]` evidence list — the two fields it cannot fake.
+
+Want to see an actual session, mistakes included? The [tutorial](#tutorial-a-real-run) below replays one verbatim.
+
+## The guarantees
 
 | Promise | How it's kept |
 |---|---|
 | False success is impossible | A run that skipped a gate has no way to report itself as a success — and tests prove it by executing the compiled output |
 | Giving up leaves evidence | Attempts and measured values are recorded; "close enough" is not a thing |
 | Verdicts don't drift | The judging tools never call an LLM. Same graph, same verdict — no mood, no persuasion |
+| The checks themselves are audited | Every machine-enforced check must prove it *can* fail — aimed at a known-bad input, it must go red, or installation is refused |
+| The record can't be quietly rewritten | Every measurement is hash-chained to the one before; edit, delete, or reorder a past line and every command refuses until a human looks |
 
-## What's in the harness
+### Giving up is not succeeding
+
+<img src="images/abandon.svg" alt="A gate that exhausts retries records evidence in abandoned[] and the final completed flag is forced to false while that list is non-empty" width="100%" />
+
+When a gate exhausts its retries with `on_exhaust: partial`, the workflow moves on — but it records `{gate, node, field, op, threshold, measured, attempts}` in an `abandoned[]` list, and the final `completed` flag is **forced to false** while that list is non-empty. A run that skipped a gate can't report itself as a success. Execution-semantics tests pin this down by actually running compiled output.
+
+### A spec is not an installation
+
+<img src="images/stop-hook.svg" alt="When the agent tries to end its turn, hooks-gate runs every check: all green ends the turn, any red blocks it with exit 2 and feeds the failing gates back to the model" width="100%" />
+
+The compiler emits `build/hooks.json` — per-gate check commands with an exit-code contract — and deliberately stops there. Installing it is a separate tool with a separate human approval; once installed, the session literally cannot end its turn while a gate is red. Auto-install stays forbidden: a tool that silently wires itself into your session's enforcement layer is the exact kind of unaccountable magic this project exists to prevent. Until installed, the spec blocks nothing — and completion reports are required to say so in those words.
+
+### Every check must prove it can fail
+
+A green checkmark from a check that *cannot go red* is decoration, not enforcement. So a hook entry may declare a `probe` — the same oracle aimed at a known-bad input, where it **must** exit non-zero. The installer runs every declared probe before installing anything. A probe that exits 0 has just demonstrated a check that cannot fail, and the install is refused:
+
+```text
+$ node tools/install-hooks.mjs graph.json build/hooks.json --yes
+installer refused: probe refuted nothing — these checks cannot fail (or the probe never finished), so they enforce nothing:
+  G1: probe exit 0 ← node -e "process.exit(0)"
+```
+
+A healthy plan prints the counter-evidence per gate:
+
+```text
+  probe   G0  exit 1 ✅ (the oracle can fail)
+  probe   G0b  exit 1 ✅ (the oracle can fail)
+  probe   G4c  exit 1 ✅ (the oracle can fail)
+```
+
+Those three lines are from this repo's own gates — each aimed at a committed broken fixture ([tools/fixtures/](tools/fixtures/)) it must refuse.
+
+### The evidence defends itself
+
+Every accepted measurement lands in an append-only ledger, and the ledger is a **hash chain**: each line carries the hash of the line before it, and the state file anchors the chain head. This is what happened when a recorded measurement was edited after the fact — every command refuses, not just `verify`:
+
+```text
+$ node tools/run.mjs graph.json next
+🔴 ledger chain broken — refusing every command:
+  line 3: h mismatch — the line was edited
+  the ledger is the evidence layer; a run on tampered evidence proves nothing.
+  → inspect the ledger, archive it elsewhere, remove it, then re-init
+```
+
+Stated honestly where the chain lives, in code and here: this is tamper-*evident*, not tamper-*proof* — see [Honest limits](#honest-limits).
+
+## Under the hood
+
+Everything below is for readers who want the machinery. If you just wanted to use it, you already know enough — the three steps above are the whole user manual.
+
+### What's in the harness
 
 | Piece | What it does |
 |---|---|
@@ -71,7 +211,7 @@ Not for one-or-two-file edits — if drawing the plan costs more than the work, 
 | **Hook spec + installer** | Emits `build/hooks.json` so gates can be enforced from *outside* the session too — and an approval-gated installer wires it into project settings as a Stop hook. A declared hook without a real command is caught (`hook_loss`) |
 | **Scaffold** | Measures the target repo and generates a skeleton that already passes validation — you start green and stay green |
 
-## The four stages
+### The four stages
 
 Avalon is architected as four stages. The tools in this repo are their implementation:
 
@@ -84,34 +224,9 @@ Avalon is architected as four stages. The tools in this repo are their implement
 
 The stage boundaries are load-bearing: ① is the only place judgment enters, ② must be lossless or refuse, ③ may execute but never judge, and ④ isn't allowed to exist yet. Each boundary has at least one scar behind it (see [Where the rules came from](#where-the-rules-came-from)).
 
-## How a run flows
+### Three ways to run it
 
-<img src="images/pipeline.svg" alt="1 scaffold measures the repo, 2 design is human judgment, 3 validate and compile check the four numbers, 4 run enforces order with an append-only ledger" width="100%" />
-
-Two of the four steps are machines, one is you, and one is a machine watching you. Step 2 — deciding what the nodes and gates should be — is the only place judgment enters. Everything around it is deterministic, which is the point: your judgment gets recorded as numbers once, and after that no one gets to re-judge on vibes.
-
-## Install
-
-```bash
-git clone https://github.com/Evanciel/avalon && cd avalon
-npm test        # 158 tests, zero dependencies, Node 18+
-```
-
-The toolchain is also on npm — `npm i avalon-skill` — if you want the tools without the skill; the skill itself installs by cloning into `~/.claude/skills` as above.
-
-To use it as a **Claude Code skill**, clone it into your skills directory — [SKILL.md](SKILL.md) has the frontmatter (`name: avalon`) that registers it:
-
-```bash
-git clone https://github.com/Evanciel/avalon ~/.claude/skills/avalon
-```
-
-Then "run this under avalon" (or any similar phrasing) loads the whole procedure. No install step, no dependencies — the tools are six standalone `.mjs` files.
-
-## Three ways to run it
-
-### ① One-shot, as a skill — the intended way
-
-You state the goal; the agent does the rest:
+**① One-shot, as a skill — the intended way.** You state the goal; the agent does the rest:
 
 1. Runs `scaffold` against the target repo to measure it.
 2. Splits the work into nodes and writes the gates. This is the judgment step — the agent drafts it, the validator holds veto power.
@@ -120,9 +235,7 @@ You state the goal; the agent does the rest:
 
 It drives itself to completion, with two exceptions that are the whole point: irreversible steps stop and wait for human approval, and a gate it gave up on stays in `abandoned[]` — the agent can't quietly decide "close enough".
 
-### ② The compiled workflow
-
-`compile.mjs` turns the graph into a workflow script for an agent-orchestration host (one `agent()` call per node, `parallel()` for fan-out). It supports resuming a stopped run and pre-approving specific irreversible nodes:
+**② The compiled workflow.** `compile.mjs` turns the graph into a workflow script for an agent-orchestration host (one `agent()` call per node, `parallel()` for fan-out). It supports resuming a stopped run and pre-approving specific irreversible nodes:
 
 ```
 Workflow({ scriptPath: "build/graph.workflow.js",
@@ -131,9 +244,7 @@ Workflow({ scriptPath: "build/graph.workflow.js",
 
 A node with `policy.requires_approval: true` **stops before executing** unless its id is in `approved`. The default is the empty set — a regression test pins that, so the approval gate can't quietly become a no-op.
 
-### ③ The runner CLI — manual or agent-driven
-
-When a session works through nodes directly instead of spawning sub-agents:
+**③ The runner CLI — manual or agent-driven.** When a session works through nodes directly instead of spawning sub-agents:
 
 ```bash
 node tools/run.mjs graph.json init            # create state (after editing the graph: init --force)
@@ -157,78 +268,11 @@ Every command takes `--json` for machine-readable output. The runner is mostly a
 | Edit the graph after `init` and keep going | Flagged **STALE** — the state remembers which graph hash it was built from |
 | Fail a gate more times than `max_retry` | **Halted** — the run stops and hands the decision to a human |
 
-Every accepted measurement is appended to the ledger. Nothing in it is ever rewritten — even `init --force` discards the state but keeps the ledger. And the ledger defends itself: every line is **hash-chained** to the one before it, and the state file anchors the chain head, so editing, deleting, or reordering a past entry makes every command refuse until a human looks.
+Every accepted measurement is appended to the ledger. Nothing in it is ever rewritten — even `init --force` discards the state but keeps the ledger. And the ledger defends itself: see [The evidence defends itself](#the-evidence-defends-itself).
 
 Tool messages are English by default; a Korean system locale (or `AVALON_LANG=ko`) switches them to Korean. Build artifacts are always English — their bytes are hashed, so they must not depend on the environment.
 
-## What it looks like in practice
-
-<img src="images/where-it-sits.svg" alt="You give the agent a one-line goal, the agent works on the repo, and 'done' can only reach you through Avalon's gates" width="100%" />
-
-Avalon doesn't replace your AI agent — it sits between the agent's "done" and your trust. The agent keeps doing all the work; its claims just have to pass through gates on the way to you.
-
-### In Claude Code
-
-With the skill installed ([Install](#install)), the whole invocation is one line of plain language:
-
-```text
-Run this under avalon — add a search endpoint to my-api, all tests must pass.
-```
-
-Any phrasing works ("avalon으로 진행해", "use the avalon procedure", …) — the skill's trigger is the name. What happens next, with no further prompting:
-
-<img src="images/session-flow.svg" alt="A real session: one line from you, the agent measures and designs, tools give verdicts, a failing gate loops back, approval is requested at the irreversible step, and the final report says completed true, abandoned empty" width="100%" />
-
-1. The agent runs `scaffold`, drafts the graph, and shows you the four numbers before doing anything.
-2. It works node by node, submitting measurements; the tools answer pass or fail.
-3. At the irreversible node it stops and asks you — that pause is compiled into the output, not a courtesy.
-4. The final message carries `completed` and the `abandoned[]` evidence list — the two fields it cannot fake.
-
-Your actual role: read the gate design once at step 1 (the thresholds are yours to argue), answer the approval question, and read four numbers at the end.
-
-### You don't need to be a developer
-
-If "search endpoint" meant nothing to you, that's fine — the command is just everyday language. Two situations, one example each:
-
-**Starting a project from scratch** — nothing exists yet. Say the goal, and add "check it actually works":
-
-```text
-Run this under avalon — build a website for my café from scratch:
-a menu page, directions, and a contact form. Check that all three actually work.
-```
-
-**Adding to something you're already building** — open Claude Code in that project's folder and ask. The agent measures what's already there (`scaffold`) before touching anything:
-
-```text
-Run this under avalon — add a booking feature to the site I've been building.
-Check that a new booking actually shows up in the list.
-```
-
-Other ways people phrase it:
-
-- A change you're scared of: *"Run this under avalon — fix the payment part. Ask me before anything that can't be undone."*
-- Leaving it overnight: *"Run this under avalon — work through this list while I sleep. If a gate fails, stop — don't gloss over it."*
-
-The numbers, gates, and graph are the agent's job to design. What it must do is show you the criteria **in plain words before starting** — "pressing send must increase stored messages by one; zero failed checks." Your part is three things:
-
-1. Read the criteria list before the run and say "yes, that's what done means."
-2. Answer when it asks "this step can't be undone — proceed?"
-3. Read the traffic lights at the end — four greens means done; anything in `abandoned` means "this part didn't make it, and here's the evidence."
-
-Things you will never touch: `graph.json` (the agent writes it), the commands (the agent runs them), the thresholds (the agent proposes them — you just say whether that's what *done* means to you).
-
-### In GPT or any other agent
-
-Nothing in the harness is Claude-specific — the tools are six plain Node CLIs, no API keys, no vendor calls. Point any agent that can run shell commands at the procedure:
-
-```text
-Clone https://github.com/Evanciel/avalon, read SKILL.md, and follow its
-procedure for this task: <your task here>
-```
-
-Every agent gets the same treatment: the validator vetoes its graph drafts, the runner refuses its shortcuts, and the compiled `completed` flag ignores its opinion. And with no AI at all, the runner CLI still works — as a disciplined checklist for humans.
-
-## Tutorial: a real run
+### Tutorial: a real run
 
 Everything below actually happened — the commands and outputs are from a live session, mistakes included. (These outputs were captured with Korean tool messages — the tools now default to English, with `AVALON_LANG=ko` for Korean; translations inline.)
 
@@ -323,7 +367,7 @@ approval required — after user confirmation: same command with --yes    (exit 
 
 With `--yes` it installs; from then on the session literally cannot end its turn while a gate is red (`hooks-gate.mjs` exits 2, which blocks the stop). If the graph changes after install, the gate reports STALE and blocks instead of passing on stale rules — recompile and reinstall to resolve. Remove anytime with `--uninstall --yes`.
 
-## The graph format
+### The graph format
 
 One JSON file is the canonical plan. The pieces:
 
@@ -359,7 +403,7 @@ When you run `done`, the tool reads the latest measurement of `tests_failed`, ap
 
 **Schema versioning** — `spec.version` selects the validation vocabulary. Old v1.1 graphs validate under v1.1 rules (they're the regression corpus; rejecting them would erase the baseline), but v1.1 is marked *not runnable* — it has no field for *which repo* or *what task*, so the compiler refuses it. Validating and being safe to execute are different claims, and the tools keep them separate.
 
-## Four numbers
+### Four numbers
 
 **All four must be green before anything runs:**
 
@@ -372,86 +416,46 @@ When you run `done`, the tool reads the latest measurement of `tests_failed`, ap
 
 If a loss number isn't zero, you have a declaration that nothing enforces. That graph is decoration, and the tools say so with a non-zero exit.
 
-## The tools, one by one
+### The tools, one by one
 
-Six standalone files, no dependencies between them beyond imports, none of them ever calls an LLM (INV-1). Deterministic means literally: same input, same bytes out.
+Standalone files, no dependencies between them beyond imports, none of them ever calls an LLM (INV-1). Deterministic means literally: same input, same bytes out.
 
-### `scaffold.mjs` — measure, don't guess
+**`scaffold.mjs` — measure, don't guess.** Walks the target repo (skipping `node_modules`, `.git`, build output; capped so it never crawls 50k files), detects the stack, buckets the size, stamps the hashes, and emits a graph skeleton **that already passes validation**. The nodes are placeholders — that part is judgment, yours — but the expensive boilerplate (13 required fields, hashes, retry/policy defaults, a mandatory human node) is machine-filled. Starting green and staying green beats starting red and hoping.
 
-Walks the target repo (skipping `node_modules`, `.git`, build output; capped so it never crawls 50k files), detects the stack, buckets the size, stamps the hashes, and emits a graph skeleton **that already passes validation**. The nodes are placeholders — that part is judgment, yours — but the expensive boilerplate (13 required fields, hashes, retry/policy defaults, a mandatory human node) is machine-filled. Starting green and staying green beats starting red and hoping.
+**`hash.mjs` — canonical JSON + sha256.** Canonicalizes (key order irrelevant, array order preserved — it carries meaning), hashes, and stamps `sha256:<64hex>` into the graph, excluding the hash field itself. Idempotent; three runs, three identical results. This stamp is what STALE detection and hook matching hang off.
 
-### `hash.mjs` — canonical JSON + sha256
-
-Canonicalizes (key order irrelevant, array order preserved — it carries meaning), hashes, and stamps `sha256:<64hex>` into the graph, excluding the hash field itself. Idempotent; three runs, three identical results. This stamp is what STALE detection and hook matching hang off.
-
-### `validate.mjs` — G0 + six checks + a schema with opinions
+**`validate.mjs` — G0 + six checks + a schema with opinions.**
 
 - **G0**: all 13 required fields present. Partial coverage is meaningless, so the bar is 1.00.
 - **Six static checks**: gates only reference declared state fields · irreversible nodes have approval · every node reachable · every cycle has a cap (termination) · every node has a budget · every edge points at a real node with a well-formed `when`.
 - **Schema-level rejections** (before the checks even run): descriptive gates — a gate with prose instead of `field/op/threshold` can't be expressed at all · unknown operators · gates on ungateable types · boolean thresholds · ghost gate references from `host.enforced_by_hook` · retired vocabulary on modern graphs.
 - **Quality warnings** (non-fatal): missing `scope`/`host`, hooks declared without a `check` command.
 
-### `render.mjs` — the markdown is an artifact
+**`render.mjs` — the markdown is an artifact.** Renders the JSON into readable markdown deterministically. `--check` re-renders and compares **byte-exact** (sha256) against the committed `graph.md` — that's gate G0b. If someone hand-edits the markdown, the check fails. Docs can't drift from the plan, because docs *are* the plan, rendered.
 
-Renders the JSON into readable markdown deterministically. `--check` re-renders and compares **byte-exact** (sha256) against the committed `graph.md` — that's gate G0b. If someone hand-edits the markdown, the check fails. Docs can't drift from the plan, because docs *are* the plan, rendered.
-
-### `compile.mjs` — lossless translation or no translation
-
-A pure function from IR to a workflow script. Nondeterminism is banned inside it — no `Date`, no `Math.random`, no relying on object-key iteration order. What it emits:
+**`compile.mjs` — lossless translation or no translation.** A pure function from IR to a workflow script. Nondeterminism is banned inside it — no `Date`, no `Math.random`, no relying on object-key iteration order. What it emits:
 
 - one sub-agent call per node, with a **shared context block** (fingerprint, target, task) injected into every prompt — measured facts travel with the work;
 - **parallel fan-out** when a node has multiple `always` edges, with the branches meeting at a single join;
 - human-node gates preserved (a `design_approved` measured by a human is still a gate, not a comment);
 - **approval stops** at `requires_approval` nodes, honoring the `approved` argument (default: nobody is approved);
 - **resume** support (`resume_from`, `resume_state`, `resume_loops`);
-- the **ABANDONED ledger** (next section);
+- the **ABANDONED ledger** ([see above](#giving-up-is-not-succeeding));
 - `build/hooks.json` — one entry per hook-enforced gate: `{ gate, field, op, threshold, check, expect_exit: 0 }`, joined to the graph by its spec hash.
 
 Then it audits itself: every gate in the IR must appear in the output (`gate_loss`), every declared hook must appear in `hooks.json` with a command (`hook_loss`). Loss anywhere → non-zero exit, no artifact trusted.
 
-### `run.mjs` — the executor
+**`run.mjs` — the executor.** Frontier discipline, measurement ledger, gate verdicts, STALE detection, halt-to-human. Described in [Three ways to run it](#three-ways-to-run-it) above; the four invariants at the top of the file are the contract, and the self-test exists to prove each one actually bites. The ledger hash chain — and the refusal it produces under tampering — is shown in [The evidence defends itself](#the-evidence-defends-itself).
 
-Frontier discipline, measurement ledger, gate verdicts, STALE detection, halt-to-human. Described in [Three ways to run it](#three-ways-to-run-it) above; the four invariants at the top of the file are the contract, and the self-test exists to prove each one actually bites.
-
-The ledger is a **hash chain**: each line carries `h = sha256(canonical(line))` plus the `h` of the line before it, and the state file anchors the chain head. This is what happened when a recorded measurement was edited from 7 to 1 after the fact — every command refuses, not just `verify`:
-
-```text
-$ node tools/run.mjs graph.json next
-🔴 ledger chain broken — refusing every command:
-  line 3: h mismatch — the line was edited
-  the ledger is the evidence layer; a run on tampered evidence proves nothing.
-  → inspect the ledger, archive it elsewhere, remove it, then re-init
-```
-
-One caveat, stated in the code where the chain lives: this is tamper-*evident*, not tamper-*proof*. It catches edits, deletions, reordering, and truncation; an actor who rewrites the ledger and the state file *together, consistently* is beyond it — that needs an external anchor, which is precisely the job reserved for the dormant ④ ARCHIVE.
-
-### `install-hooks.mjs` + `hooks-gate.mjs` — enforcement that survives the session
-
-The installer takes `build/hooks.json` and wires it into the **project's** `.claude/settings.json` as a Stop hook. Its boundaries are the point: it writes nothing without `--yes` (prints the plan and exits 3 — an agent must not pass `--yes` without the user's say-so), it refuses the global `~/.claude` settings even with `--yes`, it refuses a spec whose hash doesn't match the current graph, it preserves everyone else's hooks, and reinstalling is idempotent. `--uninstall --yes` takes it back out.
+**`install-hooks.mjs` + `hooks-gate.mjs` — enforcement that survives the session.** The installer takes `build/hooks.json` and wires it into the **project's** `.claude/settings.json` as a Stop hook. Its boundaries are the point: it writes nothing without `--yes` (prints the plan and exits 3 — an agent must not pass `--yes` without the user's say-so), it refuses the global `~/.claude` settings even with `--yes`, it refuses a spec whose hash doesn't match the current graph, it preserves everyone else's hooks, and reinstalling is idempotent. `--uninstall --yes` takes it back out.
 
 It also pins what was approved: the byte hash of `build/hooks.json` at approval time is embedded in the installed command (`--approved sha256:…`). If the file changes in any way afterwards, the gate blocks **before running a single check** and reports TAMPERED — without this, write access to one JSON file would equal the right to have arbitrary commands executed automatically at the end of every turn. Re-approval (`--yes` reinstall) is the only path back.
 
-And it demands proof that each check **can go red**. A hook entry may declare a `probe` — the same oracle aimed at a known-bad input, so it must exit non-zero. The installer runs every declared probe at plan and install time; a probe that exits 0 has just demonstrated a check that cannot fail, and the install is refused:
-
-```text
-$ node tools/install-hooks.mjs graph.json build/hooks.json --yes
-installer refused: probe refuted nothing — these checks cannot fail (or the probe never finished), so they enforce nothing:
-  G1: probe exit 0 ← node -e "process.exit(0)"
-```
-
-A healthy plan prints the counter-evidence per gate:
-
-```text
-  probe   G0  exit 1 ✅ (the oracle can fail)
-  probe   G0b  exit 1 ✅ (the oracle can fail)
-  probe   G4c  exit 1 ✅ (the oracle can fail)
-```
-
-Hooks without probes still install (reported as unproven — no retroactive breakage), and `--status` gives a read-only diagnosis any time: installed or not, approval pin intact or TAMPERED, spec current or STALE — without running a single check.
+And it demands the counter-evidence shown in [Every check must prove it can fail](#every-check-must-prove-it-can-fail). Hooks without probes still install (reported as unproven — no retroactive breakage), and `--status` gives a read-only diagnosis any time: installed or not, approval pin intact or TAMPERED, spec current or STALE — without running a single check.
 
 Once installed, `hooks-gate.mjs` runs every declared check when the session tries to end its turn: all pass → exit 0; any fail → exit 2, which blocks the stop and feeds the failing gates back to the model. A changed graph makes it report STALE and block — enforcing yesterday's rules silently would be worse than stopping.
 
-## Where the rules came from
+### Where the rules came from
 
 None of this was designed on a whiteboard. Every rule exists because a real bug slipped through, and when the same *kind* of bug repeats, it gets a number:
 
@@ -465,7 +469,7 @@ None of this was designed on a whiteboard. Every rule exists because a real bug 
 
 The shared pattern: **a declaration gets validated, then discarded.** The loss metrics exist to make that class of bug impossible to miss.
 
-## The paper trail
+### The paper trail
 
 [docs/graph/](docs/graph/) carries the full design history — 1,300+ lines, and none of it is marketing:
 
@@ -475,21 +479,7 @@ The shared pattern: **a declaration gets validated, then discarded.** The loss m
 
 That last habit is the point of the whole directory: the docs record not just what Avalon is, but what it almost was and why that would have been wrong.
 
-## Giving up is not succeeding
-
-<img src="images/abandon.svg" alt="A gate that exhausts retries records evidence in abandoned[] and the final completed flag is forced to false while that list is non-empty" width="100%" />
-
-When a gate exhausts its retries with `on_exhaust: partial`, the workflow moves on — but it records `{gate, node, field, op, threshold, measured, attempts}` in an `abandoned[]` list, and the final `completed` flag is **forced to false** while that list is non-empty. A run that skipped a gate can't report itself as a success. Execution-semantics tests pin this down by actually running compiled output.
-
-## Hooks: a spec is not an installation
-
-<img src="images/stop-hook.svg" alt="When the agent tries to end its turn, hooks-gate runs every check: all green ends the turn, any red blocks it with exit 2 and feeds the failing gates back to the model" width="100%" />
-
-`compile.mjs` emits `build/hooks.json` — per-gate check commands with an exit-code contract — and deliberately stops there. Installation is a separate tool with a separate approval: `install-hooks.mjs` shows its plan and refuses to write anything until a human-confirmed `--yes`, installs to the project's settings only (never global), and can be uninstalled as easily as installed. Auto-install stays forbidden: a tool that silently wires itself into your session's enforcement layer is the exact kind of unaccountable magic this project exists to prevent. Until installed, the spec blocks nothing — and completion reports are required to say so in those words.
-
-Avalon's own three hooks all carry probes: each check is also aimed at a committed broken fixture ([tools/fixtures/](tools/fixtures/)) that it must refuse, so this repo's enforcement layer is provably capable of going red.
-
-## Avalon runs on Avalon
+### Avalon runs on Avalon
 
 The [graph.json](graph.json) at the repo root is not an example — it's Avalon's own development, managed by Avalon. Seven nodes (`frontend → validate → render_check → backend → compile_check → human_go → install_hooks`), six declared state fields, and three gates (G0, G0b, G4c) machine-enforced via `host.enforced_by_hook` — each with the actual command that checks it, and a probe aimed at a committed broken fixture that proves the command can fail. [graph.md](graph.md) is its render, byte-verified by G0b.
 
@@ -503,7 +493,7 @@ The graph's `guarantees` block is the honest-limits list in machine-adjacent for
 - **[run.selftest.mjs](tools/run.selftest.mjs) (41)** — the runner's refusal walls, tested by the only method that proves a guard exists: *remove the guard, and the suite must turn red*. Each test constructs the forbidden situation (out-of-frontier start, unmeasured done, edited-graph continue) and passes only if the runner refuses. The ledger-chain tests attack real ledgers — edit a past measurement, truncate the tail, append past the chain — and pass only when every command refuses.
 - **[install.selftest.mjs](tools/install.selftest.mjs) (24)** — the installer's boundaries, same method: no write without `--yes`, global settings refused, stale spec refused, other people's hooks preserved, idempotent reinstall, and the gate blocking (exit 2) on failure and on STALE. Three are TOCTOU attack scenarios: they modify `build/hooks.json` *after* approval — swapping a check for a malicious command, even regenerating graph and spec consistently — and pass only if the gate blocks **without executing anything** (a marker file proves the planted command never ran). The rest pin the probe wall (an oracle that cannot fail is refused as decoration), `--status` reading without writing, and English being the actual default language.
 
-CI runs both suites on ubuntu and windows. Line endings are pinned to LF via [.gitattributes](.gitattributes) because G0b is a byte-exact oracle — a CRLF checkout would technically be a different document.
+CI runs all three suites on ubuntu and windows. Line endings are pinned to LF via [.gitattributes](.gitattributes) because G0b is a byte-exact oracle — a CRLF checkout would technically be a different document.
 
 ## Repository map
 

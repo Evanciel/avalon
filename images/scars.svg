@@ -1,0 +1,53 @@
+<svg viewBox="0 0 1200 330" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Five real bugs became five rules: a check that could never fail, a measurement never used, agents compiled blind, approval silently dropped, a hook that never existed">
+  <rect width="1200" height="330" fill="#0D1219"/>
+  <text x="600" y="42" font-size="21" font-weight="700" fill="#E3E9F0" text-anchor="middle">Every rule here is a scar — five real bugs, five rules</text>
+
+  <!-- timeline spine -->
+  <line x1="80" y1="165" x2="1120" y2="165" stroke="#26313B" stroke-width="2"/>
+
+  <!-- scar nodes -->
+  <g text-anchor="middle">
+    <!-- 1 -->
+    <circle cx="140" cy="165" r="17" fill="#0D1219" stroke="#FF7A45" stroke-width="2"/>
+    <text x="140" y="171" font-size="14" font-weight="700" fill="#FF7A45">1</text>
+    <text x="140" y="105" font-size="12.5" fill="#93A0AE">a check that</text>
+    <text x="140" y="122" font-size="12.5" fill="#93A0AE">could never fail</text>
+    <text x="140" y="215" font-size="12.5" fill="#3FAA83">checks must be</text>
+    <text x="140" y="232" font-size="12.5" fill="#3FAA83">able to go red</text>
+
+    <!-- 2 -->
+    <circle cx="370" cy="165" r="17" fill="#0D1219" stroke="#FF7A45" stroke-width="2"/>
+    <text x="370" y="171" font-size="14" font-weight="700" fill="#FF7A45">2</text>
+    <text x="370" y="105" font-size="12.5" fill="#93A0AE">measured the repo,</text>
+    <text x="370" y="122" font-size="12.5" fill="#93A0AE">then never used it</text>
+    <text x="370" y="215" font-size="12.5" fill="#3FAA83">measurements travel</text>
+    <text x="370" y="232" font-size="12.5" fill="#3FAA83">with the work</text>
+
+    <!-- 3 -->
+    <circle cx="600" cy="165" r="17" fill="#0D1219" stroke="#FF7A45" stroke-width="2"/>
+    <text x="600" y="171" font-size="14" font-weight="700" fill="#FF7A45">3</text>
+    <text x="600" y="105" font-size="12.5" fill="#93A0AE">compiled agents started</text>
+    <text x="600" y="122" font-size="12.5" fill="#93A0AE">blind — no repo, no task</text>
+    <text x="600" y="215" font-size="12.5" fill="#3FAA83">target &amp; task are</text>
+    <text x="600" y="232" font-size="12.5" fill="#3FAA83">required fields</text>
+
+    <!-- 4 -->
+    <circle cx="830" cy="165" r="17" fill="#0D1219" stroke="#FF7A45" stroke-width="2"/>
+    <text x="830" y="171" font-size="14" font-weight="700" fill="#FF7A45">4</text>
+    <text x="830" y="105" font-size="12.5" fill="#93A0AE">"needs approval" validated,</text>
+    <text x="830" y="122" font-size="12.5" fill="#93A0AE">then silently dropped</text>
+    <text x="830" y="215" font-size="12.5" fill="#3FAA83">approval stops are</text>
+    <text x="830" y="232" font-size="12.5" fill="#3FAA83">compiled into the code</text>
+
+    <!-- 5 -->
+    <circle cx="1060" cy="165" r="17" fill="#0D1219" stroke="#FF7A45" stroke-width="2"/>
+    <text x="1060" y="171" font-size="14" font-weight="700" fill="#FF7A45">5</text>
+    <text x="1060" y="105" font-size="12.5" fill="#93A0AE">hook declared, all green —</text>
+    <text x="1060" y="122" font-size="12.5" fill="#93A0AE">the hook never existed</text>
+    <text x="1060" y="215" font-size="12.5" fill="#3FAA83">declarations must</text>
+    <text x="1060" y="232" font-size="12.5" fill="#3FAA83">carry a machine</text>
+  </g>
+
+  <text x="600" y="288" font-size="14" fill="#E3E9F0" text-anchor="middle">The shared pattern: <tspan fill="#FF7A45" font-weight="700">a declaration gets validated, then discarded.</tspan></text>
+  <text x="600" y="310" font-size="13" fill="#93A0AE" text-anchor="middle">The loss metrics (gate_loss · hook_loss) exist so that can never happen quietly again.</text>
+</svg>

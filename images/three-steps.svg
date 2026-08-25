@@ -1,0 +1,55 @@
+<svg viewBox="0 0 1200 360" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Three steps: install once, say one line in plain language, read the traffic lights at the end">
+  <rect width="1200" height="360" fill="#0D1219"/>
+  <defs>
+    <marker id="ts-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#FF7A45"/>
+    </marker>
+  </defs>
+
+  <!-- panel 1: install -->
+  <rect x="40" y="60" width="340" height="240" rx="14" fill="#131A22" stroke="#26313B" stroke-width="1.6"/>
+  <text x="70" y="110" font-size="34" font-weight="800" fill="#FF7A45">1</text>
+  <text x="105" y="108" font-size="18" font-weight="700" fill="#E3E9F0">Install once</text>
+  <rect x="66" y="140" width="288" height="66" rx="8" fill="#0D1219" stroke="#26313B"/>
+  <text x="82" y="167" font-size="12" font-family="Consolas, monospace" fill="#93A0AE">git clone …/avalon</text>
+  <text x="82" y="189" font-size="12" font-family="Consolas, monospace" fill="#93A0AE">  ~/.claude/skills/avalon</text>
+  <text x="70" y="240" font-size="13" fill="#93A0AE">One command. Zero dependencies.</text>
+  <text x="70" y="262" font-size="13" fill="#93A0AE">You never run the tools yourself.</text>
+
+  <path d="M385 180 H 425" stroke="#FF7A45" stroke-width="2.2" marker-end="url(#ts-arrow)"/>
+
+  <!-- panel 2: say one line -->
+  <rect x="430" y="60" width="340" height="240" rx="14" fill="#131A22" stroke="#26313B" stroke-width="1.6"/>
+  <text x="460" y="110" font-size="34" font-weight="800" fill="#FF7A45">2</text>
+  <text x="495" y="108" font-size="18" font-weight="700" fill="#E3E9F0">Say one line</text>
+  <!-- speech bubble -->
+  <rect x="456" y="136" width="288" height="94" rx="12" fill="#0D1219" stroke="#3FAA83" stroke-width="1.6"/>
+  <path d="M490 230 L 502 252 L 514 230 Z" fill="#0D1219" stroke="#3FAA83" stroke-width="1.6"/>
+  <text x="472" y="164" font-size="13" fill="#E3E9F0">"Run this under avalon —</text>
+  <text x="472" y="185" font-size="13" fill="#E3E9F0">build my café site.</text>
+  <text x="472" y="206" font-size="13" fill="#E3E9F0">Check it actually works."</text>
+  <text x="460" y="282" font-size="13" fill="#93A0AE">Plain language. The agent designs</text>
+  <text x="460" y="300" font-size="13" fill="#93A0AE" style="white-space:pre">the plan and shows you the criteria first.</text>
+
+  <path d="M775 180 H 815" stroke="#FF7A45" stroke-width="2.2" marker-end="url(#ts-arrow)"/>
+
+  <!-- panel 3: read the lights -->
+  <rect x="820" y="60" width="340" height="240" rx="14" fill="#131A22" stroke="#26313B" stroke-width="1.6"/>
+  <text x="850" y="110" font-size="34" font-weight="800" fill="#FF7A45">3</text>
+  <text x="885" y="108" font-size="18" font-weight="700" fill="#E3E9F0">Read the lights</text>
+  <g font-family="Consolas, monospace" font-size="11.5">
+    <rect x="846" y="132" width="140" height="26" rx="13" fill="none" stroke="#3FAA83"/>
+    <text x="916" y="149" fill="#3FAA83" text-anchor="middle">fields 1.00</text>
+    <rect x="998" y="132" width="140" height="26" rx="13" fill="none" stroke="#3FAA83"/>
+    <text x="1068" y="149" fill="#3FAA83" text-anchor="middle">checks 6/6</text>
+    <rect x="846" y="168" width="140" height="26" rx="13" fill="none" stroke="#3FAA83"/>
+    <text x="916" y="185" fill="#3FAA83" text-anchor="middle">gate_loss 0</text>
+    <rect x="998" y="168" width="140" height="26" rx="13" fill="none" stroke="#3FAA83"/>
+    <text x="1068" y="185" fill="#3FAA83" text-anchor="middle">hook_loss 0</text>
+  </g>
+  <text x="850" y="230" font-size="13.5" font-family="Consolas, monospace" fill="#E3E9F0">completed: <tspan fill="#3FAA83" font-weight="700">true</tspan>   abandoned: <tspan fill="#3FAA83" font-weight="700">[]</tspan></text>
+  <text x="850" y="262" font-size="13" fill="#93A0AE">Four greens = done. Anything in</text>
+  <text x="850" y="280" font-size="13" fill="#93A0AE">abandoned = "didn't make it, here's proof."</text>
+
+  <text x="600" y="336" font-size="13.5" fill="#6B7885" text-anchor="middle">Between 2 and 3 the agent may ask one thing: "this step can't be undone — proceed?" That pause is compiled in, not a courtesy.</text>
+</svg>
