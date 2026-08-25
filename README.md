@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="images/banner.svg" alt="Avalon — declare the graph, let the numbers judge" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/banner.svg" alt="Avalon — declare the graph, let the numbers judge" width="100%" />
 
 **An AI agent's "done" is an opinion. Avalon turns it into a measurement.**<br/>
 Pin the pass conditions as numbers before the work starts. Let tools, not the AI, do the judging.
@@ -29,13 +29,13 @@ An agent had been handed a multi-step job and left to work. It planned well, wor
 
 Nobody lied on purpose. The problem is structural: **the one doing the work and the one grading it are the same model.** A student grading their own exam doesn't need bad intent to hand out an A — and an agent running unattended overnight, retrying until things look green, will happily convince itself all night long.
 
-<img src="images/who-judges.svg" alt="Without Avalon the agent writes its own grade. With Avalon the agent submits measurements and a deterministic tool gives the verdict." width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/who-judges.svg" alt="Without Avalon the agent writes its own grade. With Avalon the agent submits measurements and a deterministic tool gives the verdict." width="100%" />
 
 The fix is old and boring, which is why it works: **move the judging outside.** Before the work starts, the plan is drawn as a graph — nodes are the work, edges are the order, and gates are pass conditions written as **numbers only**. Small deterministic tools do the judging. They never call an LLM, so the same graph always gets the same verdict. The agent still does all the work; it just loses the right to grade itself.
 
 None of the rules in this repo were designed on a whiteboard. Each one exists because a real bug slipped through during this project's own development — five of them, each now a rule with a regression test standing on it:
 
-<img src="images/scars.svg" alt="Five real bugs became five rules: a check that could never fail, a measurement never used, agents compiled blind, approval silently dropped, a hook that never existed" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/scars.svg" alt="Five real bugs became five rules: a check that could never fail, a measurement never used, agents compiled blind, approval silently dropped, a hook that never existed" width="100%" />
 
 (The full stories are in [Where the rules came from](#where-the-rules-came-from). Even the project's original sales pitch didn't survive its own research phase — see [The paper trail](#the-paper-trail).)
 
@@ -43,7 +43,7 @@ None of the rules in this repo were designed on a whiteboard. Each one exists be
 
 ## What Avalon does
 
-<img src="images/pipeline.svg" alt="1 scaffold measures the repo, 2 design is human judgment, 3 validate and compile check the four numbers, 4 run enforces order with an append-only ledger" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/pipeline.svg" alt="1 scaffold measures the repo, 2 design is human judgment, 3 validate and compile check the four numbers, 4 run enforces order with an append-only ledger" width="100%" />
 
 Two of the four steps are machines, one is you (or the agent, with a machine holding veto power), and one is a machine watching the work happen. Step 2 — deciding what the nodes and gates should be — is the only place judgment enters. Everything around it is deterministic, which is the point: judgment gets recorded as numbers once, and after that no one gets to re-judge on vibes.
 
@@ -57,7 +57,7 @@ There is no place in the format to write "check if it looks good." Prose is not 
 
 ## Start in three steps
 
-<img src="images/three-steps.svg" alt="Three steps: install once, say one line in plain language, read the traffic lights at the end" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/three-steps.svg" alt="Three steps: install once, say one line in plain language, read the traffic lights at the end" width="100%" />
 
 ### ① Install once
 
@@ -125,13 +125,13 @@ Every agent gets the same treatment: the validator vetoes its graph drafts, the 
 
 ## What a run looks like
 
-<img src="images/where-it-sits.svg" alt="You give the agent a one-line goal, the agent works on the repo, and 'done' can only reach you through Avalon's gates" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/where-it-sits.svg" alt="You give the agent a one-line goal, the agent works on the repo, and 'done' can only reach you through Avalon's gates" width="100%" />
 
 Avalon doesn't replace your AI agent — it sits between the agent's "done" and your trust. The agent keeps doing all the work; its claims just have to pass through gates on the way to you.
 
 From the one line you typed, with no further prompting:
 
-<img src="images/session-flow.svg" alt="A real session: one line from you, the agent measures and designs, tools give verdicts, a failing gate loops back, approval is requested at the irreversible step, and the final report says completed true, abandoned empty" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/session-flow.svg" alt="A real session: one line from you, the agent measures and designs, tools give verdicts, a failing gate loops back, approval is requested at the irreversible step, and the final report says completed true, abandoned empty" width="100%" />
 
 1. The agent runs `scaffold`, drafts the graph, and shows you the four numbers before doing anything.
 2. It works node by node, submitting measurements; the tools answer pass or fail.
@@ -152,13 +152,13 @@ Want to see an actual session, mistakes included? The [tutorial](#tutorial-a-rea
 
 ### Giving up is not succeeding
 
-<img src="images/abandon.svg" alt="A gate that exhausts retries records evidence in abandoned[] and the final completed flag is forced to false while that list is non-empty" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/abandon.svg" alt="A gate that exhausts retries records evidence in abandoned[] and the final completed flag is forced to false while that list is non-empty" width="100%" />
 
 When a gate exhausts its retries with `on_exhaust: partial`, the workflow moves on — but it records `{gate, node, field, op, threshold, measured, attempts}` in an `abandoned[]` list, and the final `completed` flag is **forced to false** while that list is non-empty. A run that skipped a gate can't report itself as a success. Execution-semantics tests pin this down by actually running compiled output.
 
 ### A spec is not an installation
 
-<img src="images/stop-hook.svg" alt="When the agent tries to end its turn, hooks-gate runs every check: all green ends the turn, any red blocks it with exit 2 and feeds the failing gates back to the model" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/stop-hook.svg" alt="When the agent tries to end its turn, hooks-gate runs every check: all green ends the turn, any red blocks it with exit 2 and feeds the failing gates back to the model" width="100%" />
 
 The compiler emits `build/hooks.json` — per-gate check commands with an exit-code contract — and deliberately stops there. Installing it is a separate tool with a separate human approval; once installed, the session literally cannot end its turn while a gate is red. Auto-install stays forbidden: a tool that silently wires itself into your session's enforcement layer is the exact kind of unaccountable magic this project exists to prevent. Until installed, the spec blocks nothing — and completion reports are required to say so in those words.
 

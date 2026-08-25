@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="images/banner.svg" alt="Avalon — 用图来声明，让数字来裁决" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/banner.svg" alt="Avalon — 用图来声明，让数字来裁决" width="100%" />
 
 **AI 智能体的"完成了"只是一个意见。Avalon 把它变成一次测量。**<br/>
 在开工之前就把通过条件钉成数字。裁决交给工具，而不是 AI 自己。
@@ -29,13 +29,13 @@
 
 没有谁存心撒谎。问题是结构性的：**干活的和打分的是同一个模型。** 学生给自己阅卷，不需要坏心眼也会打出 A — 而一个通宵无人值守、重试到一切看起来变绿为止的智能体，会心安理得地说服自己一整晚。
 
-<img src="images/who-judges.svg" alt="没有 Avalon 时智能体给自己打分。有了 Avalon，智能体提交测量值，由确定性工具给出裁决。" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/who-judges.svg" alt="没有 Avalon 时智能体给自己打分。有了 Avalon，智能体提交测量值，由确定性工具给出裁决。" width="100%" />
 
 解法古老而无聊，正因如此才管用：**把裁决挪到外面去。** 在开工之前，先把计划画成一张图 — 节点是要做的事，边是顺序，门是**只能写数字**的通过条件。裁决由一组小而确定性的工具来做。它们从不调用 LLM，所以同一张图永远得到同一个裁决。活儿还是智能体全干 — 它只是失去了给自己打分的权利。
 
 这个仓库里没有一条规则是在白板上设计出来的。每一条的背后，都是本项目自己开发过程中真实漏过去的一个 bug — 一共五个，如今每个都变成了一条规则，底下站着一个回归测试：
 
-<img src="images/scars.svg" alt="五个真实的 bug 变成了五条规则：永远不会失败的检查、测了却从未用上的测量、蒙着眼被编译的智能体、被悄悄丢弃的审批、从未存在过的钩子" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/scars.svg" alt="五个真实的 bug 变成了五条规则：永远不会失败的检查、测了却从未用上的测量、蒙着眼被编译的智能体、被悄悄丢弃的审批、从未存在过的钩子" width="100%" />
 
 （完整的故事在[规则从哪里来](#规则从哪里来)。连这个项目最初的宣传话术都没能活过自己的调研阶段 — 见[设计的书面痕迹](#设计的书面痕迹)。）
 
@@ -43,7 +43,7 @@
 
 ## Avalon 做什么
 
-<img src="images/pipeline.svg" alt="1 scaffold 实测仓库，2 design 是人的判断，3 validate 和 compile 检查四个数字，4 run 强制顺序并写入只增不改的台账" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/pipeline.svg" alt="1 scaffold 实测仓库，2 design 是人的判断，3 validate 和 compile 检查四个数字，4 run 强制顺序并写入只增不改的台账" width="100%" />
 
 四步之中，两步是机器，一步是你（或智能体 — 由握着否决权的机器盯着），还有一步是看着活儿发生的机器。判断只在第 2 步进场 — 决定节点和门该是什么的那一刻。它周围的一切都是确定性的，这正是重点：判断只以数字的形式记录一次，此后没有任何人能凭感觉重新裁决。
 
@@ -57,7 +57,7 @@
 
 ## 三步开始
 
-<img src="images/three-steps.svg" alt="三步：安装一次，用大白话说一句，最后看红绿灯" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/three-steps.svg" alt="三步：安装一次，用大白话说一句，最后看红绿灯" width="100%" />
 
 ### ① 安装一次
 
@@ -125,13 +125,13 @@ git clone https://github.com/Evanciel/avalon ~/.claude/skills/avalon
 
 ## 一次运行是什么样子
 
-<img src="images/where-it-sits.svg" alt="你给智能体一句话目标，智能体在仓库里干活，而'完成了'只有穿过 Avalon 的门才能到达你" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/where-it-sits.svg" alt="你给智能体一句话目标，智能体在仓库里干活，而'完成了'只有穿过 Avalon 的门才能到达你" width="100%" />
 
 Avalon 不取代你的 AI 智能体 — 它插在智能体的"完成了"和你的信任之间。活儿还是智能体全干，只是它的说法在到达你之前必须过门。
 
 从你敲下的那一句话开始，无需再指挥：
 
-<img src="images/session-flow.svg" alt="真实会话：你给一句话，智能体实测并设计，工具给出裁决，不合格的门回环重试，不可逆步骤请求审批，最终报告写着 completed true、abandoned 为空" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/session-flow.svg" alt="真实会话：你给一句话，智能体实测并设计，工具给出裁决，不合格的门回环重试，不可逆步骤请求审批，最终报告写着 completed true、abandoned 为空" width="100%" />
 
 1. 智能体先跑 `scaffold`、起草图，在动手之前把四个数字亮给你看。
 2. 它逐节点干活、提交测量值；工具回答通过或不通过。
@@ -152,13 +152,13 @@ Avalon 不取代你的 AI 智能体 — 它插在智能体的"完成了"和你�
 
 ### 放弃不等于成功
 
-<img src="images/abandon.svg" alt="重试耗尽的门会把证据留在 abandoned[] 里，只要该列表非空，最终的 completed 就被强制为 false" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/abandon.svg" alt="重试耗尽的门会把证据留在 abandoned[] 里，只要该列表非空，最终的 completed 就被强制为 false" width="100%" />
 
 当一个门耗尽重试、且配置为 `on_exhaust: partial` 时，工作流会继续前进 — 但会把 `{gate, node, field, op, threshold, measured, attempts}` 记入 `abandoned[]` 列表，而只要这个列表非空，最终的 `completed` 标志就被**强制置为 false**。跳过了门的运行，没有任何办法把自己上报为成功。执行语义测试通过真正运行编译产物把这一点钉死。
 
 ### 规格不等于安装
 
-<img src="images/stop-hook.svg" alt="智能体要结束回合时，hooks-gate 跑一遍所有检查：全绿则回合结束，有红则以 exit 2 拦截，并把不合格的门反馈给模型" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/stop-hook.svg" alt="智能体要结束回合时，hooks-gate 跑一遍所有检查：全绿则回合结束，有红则以 exit 2 拦截，并把不合格的门反馈给模型" width="100%" />
 
 编译器输出 `build/hooks.json` — 每个门的 check 命令加退出码契约 — 并刻意止步于此。安装它是另一个工具、另一次人工审批；一旦装好，只要有门是红的，会话就真的无法结束回合。自动安装始终被禁止：一个悄悄把自己接进你会话强制层的工具，恰恰是这个项目要防的那种无法问责的魔法。安装之前，规格不拦截任何东西 — 而且完成报告被要求原样写出这句话。
 

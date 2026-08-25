@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="images/banner.svg" alt="Avalon — 그래프로 선언하고, 숫자로 판정한다" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/banner.svg" alt="Avalon — 그래프로 선언하고, 숫자로 판정한다" width="100%" />
 
 **AI 에이전트의 "다 됐습니다"는 의견입니다. Avalon은 그것을 측정으로 바꿉니다.**<br/>
 일을 시작하기 전에 통과 조건을 숫자로 못 박고, 판정은 AI가 아니라 도구가 내리게 합니다.
@@ -29,13 +29,13 @@
 
 일부러 거짓말한 이는 없습니다. 문제는 구조입니다: **일을 하는 쪽과 채점하는 쪽이 같은 모델입니다.** 자기 시험지를 채점하는 학생은 나쁜 의도 없이도 A를 줄 수 있습니다 — 그리고 초록으로 보일 때까지 재시도하며 밤새 무인으로 도는 에이전트는, 밤새도록 기꺼이 스스로를 설득합니다.
 
-<img src="images/who-judges.svg" alt="Avalon 없이는 에이전트가 자기 점수를 직접 쓴다. Avalon에서는 에이전트가 측정값을 제출하고, 결정적 도구가 판정을 내린다." width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/who-judges.svg" alt="Avalon 없이는 에이전트가 자기 점수를 직접 쓴다. Avalon에서는 에이전트가 측정값을 제출하고, 결정적 도구가 판정을 내린다." width="100%" />
 
 해법은 오래되고 지루한 것이라서, 그래서 통합니다: **판정을 바깥으로 옮기는 것.** 일을 시작하기 전에 계획을 그래프로 그립니다 — 노드는 할 일, 엣지는 순서, 게이트는 **숫자로만** 쓴 통과 조건입니다. 판정은 작은 결정적 도구들이 내립니다. 이 도구들은 LLM을 부르지 않아서, 같은 그래프에는 언제나 같은 판정이 나옵니다. 일은 여전히 에이전트가 전부 합니다 — 자기 점수를 매길 권리만 잃는 겁니다.
 
 이 저장소의 규칙 중 화이트보드에서 설계된 것은 하나도 없습니다. 하나하나가 이 프로젝트 자신의 개발 중에 실제로 빠져나간 버그에서 나왔습니다 — 다섯 개, 각각 지금은 회귀 테스트가 지키는 규칙이 되었습니다:
 
-<img src="images/scars.svg" alt="실제 버그 다섯이 규칙 다섯이 되었다: 절대 실패할 수 없던 검사, 한 번도 쓰이지 않은 측정, 눈 감고 컴파일된 에이전트, 조용히 버려진 승인, 존재한 적 없는 훅" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/scars.svg" alt="실제 버그 다섯이 규칙 다섯이 되었다: 절대 실패할 수 없던 검사, 한 번도 쓰이지 않은 측정, 눈 감고 컴파일된 에이전트, 조용히 버려진 승인, 존재한 적 없는 훅" width="100%" />
 
 (전체 이야기는 [규칙이 어디서 왔는가](#규칙이-어디서-왔는가)에 있습니다. 프로젝트의 원래 홍보 문구조차 자체 조사 단계를 살아남지 못했습니다 — [설계의 종이 흔적](#설계의-종이-흔적) 참조.)
 
@@ -43,7 +43,7 @@
 
 ## Avalon이 하는 일
 
-<img src="images/pipeline.svg" alt="1 scaffold는 저장소를 실측하고, 2 design은 사람의 판단이고, 3 validate와 compile은 네 숫자를 검사하고, 4 run은 순서를 강제하며 덧붙이기 전용 원장에 기록한다" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/pipeline.svg" alt="1 scaffold는 저장소를 실측하고, 2 design은 사람의 판단이고, 3 validate와 compile은 네 숫자를 검사하고, 4 run은 순서를 강제하며 덧붙이기 전용 원장에 기록한다" width="100%" />
 
 네 단계 중 둘은 기계이고, 하나는 당신(또는 에이전트 — 거부권은 기계가 쥔 채)이고, 하나는 일이 벌어지는 걸 지켜보는 기계입니다. 판단이 들어오는 곳은 2단계 — 노드와 게이트를 무엇으로 할지 정하는 순간 — 하나뿐입니다. 그 주변은 전부 결정적으로 돌아가는데, 그게 핵심입니다: 판단은 숫자로 한 번만 기록되고, 그 뒤로는 아무도 기분으로 재판정할 수 없습니다.
 
@@ -57,7 +57,7 @@
 
 ## 세 단계로 시작하기
 
-<img src="images/three-steps.svg" alt="세 단계: 한 번 설치하고, 평소 말로 한 줄 말하고, 끝에서 신호등을 읽는다" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/three-steps.svg" alt="세 단계: 한 번 설치하고, 평소 말로 한 줄 말하고, 끝에서 신호등을 읽는다" width="100%" />
 
 ### ① 한 번 설치
 
@@ -133,13 +133,13 @@ procedure for this task: <your task here>
 
 ## 실행은 이렇게 보입니다
 
-<img src="images/where-it-sits.svg" alt="당신이 에이전트에게 한 줄 목표를 주면 에이전트가 저장소에서 일하고, '다 됐어요'는 아발론의 게이트를 지나야만 당신에게 도착한다" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/where-it-sits.svg" alt="당신이 에이전트에게 한 줄 목표를 주면 에이전트가 저장소에서 일하고, '다 됐어요'는 아발론의 게이트를 지나야만 당신에게 도착한다" width="100%" />
 
 아발론은 AI 에이전트를 대체하지 않습니다 — 에이전트의 "다 됐어요"와 당신의 신뢰 사이에 앉습니다. 일은 여전히 에이전트가 전부 하고, 그 주장이 당신에게 오는 길에 게이트를 지나야 할 뿐입니다.
 
 당신이 친 한 줄에서, 추가 지시 없이:
 
-<img src="images/session-flow.svg" alt="실제 세션: 당신의 한 줄에서 에이전트가 실측하고 설계하고, 도구가 판정하고, 미달 게이트는 루프백하고, 비가역 단계에서 승인을 요청하고, 최종 보고에 completed true와 빈 abandoned가 실린다" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/session-flow.svg" alt="실제 세션: 당신의 한 줄에서 에이전트가 실측하고 설계하고, 도구가 판정하고, 미달 게이트는 루프백하고, 비가역 단계에서 승인을 요청하고, 최종 보고에 completed true와 빈 abandoned가 실린다" width="100%" />
 
 1. 에이전트가 `scaffold`를 돌리고 그래프 초안을 그린 뒤, 뭘 하기 전에 네 숫자부터 보여줍니다.
 2. 노드를 하나씩 돌며 측정값을 제출하고, 도구가 통과/미달을 답합니다.
@@ -160,13 +160,13 @@ procedure for this task: <your task here>
 
 ### 포기는 성공이 아니다
 
-<img src="images/abandon.svg" alt="재시도를 소진한 게이트는 증거를 abandoned[]에 남기고, 그 목록이 비어 있지 않는 한 최종 completed 플래그는 강제로 false다" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/abandon.svg" alt="재시도를 소진한 게이트는 증거를 abandoned[]에 남기고, 그 목록이 비어 있지 않는 한 최종 completed 플래그는 강제로 false다" width="100%" />
 
 게이트가 `on_exhaust: partial`로 재시도를 소진하면 워크플로는 전진합니다 — 하지만 `{gate, node, field, op, threshold, measured, attempts}`를 `abandoned[]` 목록에 기록하고, 그 목록이 비어 있지 않는 한 최종 `completed` 플래그는 **강제로 false**가 됩니다. 게이트를 건너뛴 실행은 자신을 성공이라고 보고할 수 없습니다. 실행 의미론 테스트가 컴파일 산출물을 실제로 돌려서 이걸 고정합니다.
 
 ### 명세는 설치가 아니다
 
-<img src="images/stop-hook.svg" alt="에이전트가 턴을 끝내려 하면 hooks-gate가 모든 check를 돌린다: 전부 초록이면 턴이 끝나고, 하나라도 빨간색이면 exit 2로 차단되어 미달 게이트가 모델에게 되먹임된다" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/stop-hook.svg" alt="에이전트가 턴을 끝내려 하면 hooks-gate가 모든 check를 돌린다: 전부 초록이면 턴이 끝나고, 하나라도 빨간색이면 exit 2로 차단되어 미달 게이트가 모델에게 되먹임된다" width="100%" />
 
 컴파일러는 `build/hooks.json` — 게이트별 check 명령과 exit 코드 계약 — 을 내고, 의도적으로 거기서 멈춥니다. 설치는 별도의 사람 승인을 거치는 별도 도구의 일입니다; 일단 설치되면, 게이트가 빨간 동안 세션은 말 그대로 턴을 끝낼 수 없습니다. 자동 설치는 여전히 금지입니다: 자기를 세션의 강제 계층에 조용히 심는 도구야말로, 이 프로젝트가 막으려고 존재하는 종류의 설명 불가능한 마법이기 때문입니다. 설치 전까지 명세는 아무것도 차단하지 않습니다 — 그리고 완료 보고서는 이 사실을 그 문장 그대로 쓰도록 요구됩니다.
 

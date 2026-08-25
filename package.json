@@ -1,6 +1,6 @@
 {
   "name": "avalon-skill",
-  "version": "1.4.0",
+  "version": "1.4.2",
   "description": "Declare work as a graph, judge it with numeric gates, execute via lossless compile — an LLM-free toolchain for agent harnesses",
   "type": "module",
   "scripts": {

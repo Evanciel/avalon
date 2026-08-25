@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="images/banner.svg" alt="Avalon — グラフで宣言し、数字が判定する" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/banner.svg" alt="Avalon — グラフで宣言し、数字が判定する" width="100%" />
 
 **AIエージェントの「完了」は意見にすぎない。Avalonはそれを測定に変える。**<br/>
 作業を始める前に合格条件を数字で固定し、判定はAIではなくツールが下します。
@@ -29,13 +29,13 @@
 
 わざと嘘をついた者はいません。問題は構造にあります: **仕事をする者と採点する者が同じモデルなのです。** 自分の答案を自分で採点する学生は、悪意がなくてもAを付けてしまいます — そして夜通し無人で回り、緑に見えるまでリトライするエージェントは、一晩中喜んで自分を納得させ続けます。
 
-<img src="images/who-judges.svg" alt="Avalonなしではエージェントが自分の点数を書く。Avalonではエージェントが測定値を出し、決定的なツールが判定する。" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/who-judges.svg" alt="Avalonなしではエージェントが自分の点数を書く。Avalonではエージェントが測定値を出し、決定的なツールが判定する。" width="100%" />
 
 解決策は古くて退屈で、だからこそ効きます: **判定を外に出す。** 作業を始める前に、計画をグラフとして描きます — ノードはやること、エッジは順序、ゲートは**数字だけ**で書かれた合格条件です。判定は小さな決定的ツール群が下します。ツールはLLMを呼ばないので、同じグラフには必ず同じ判定が返ります。仕事は今まで通りエージェントが全部やります — 自分を採点する権利だけを失うのです。
 
 このリポジトリのルールは、どれもホワイトボードの上で設計されたものではありません。すべて、このプロジェクト自身の開発中に実際にすり抜けたバグから生まれました — 5件、それぞれが今は回帰テストに支えられたルールになっています:
 
-<img src="images/scars.svg" alt="5つの実バグが5つのルールになった: 絶対に失敗できない検査、一度も使われなかった測定値、目隠しでコンパイルされたエージェント、黙って捨てられた承認、一度も存在しなかったフック" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/scars.svg" alt="5つの実バグが5つのルールになった: 絶対に失敗できない検査、一度も使われなかった測定値、目隠しでコンパイルされたエージェント、黙って捨てられた承認、一度も存在しなかったフック" width="100%" />
 
 (全部の顛末は[ルールが生まれた場所](#ルールが生まれた場所)にあります。プロジェクト当初の売り文句すら、自身の調査フェーズを生き延びられませんでした — [設計の紙の痕跡](#設計の紙の痕跡)参照。)
 
@@ -43,7 +43,7 @@
 
 ## Avalonがすること
 
-<img src="images/pipeline.svg" alt="1 scaffoldはリポジトリを実測し、2 designは人間の判断、3 validateとcompileは4つの数字を検査し、4 runは追記専用の台帳とともに順序を強制する" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/pipeline.svg" alt="1 scaffoldはリポジトリを実測し、2 designは人間の判断、3 validateとcompileは4つの数字を検査し、4 runは追記専用の台帳とともに順序を強制する" width="100%" />
 
 4ステップのうち2つは機械、1つはあなた(またはエージェント — ただし拒否権は機械が握ります)、1つは作業を見張る機械です。判断が入るのはステップ2 — ノードとゲートを何にするか決める瞬間 — だけ。その周りはすべて決定的に動きます。それが要点です: 判断は数字として一度だけ記録され、その後は誰も気分で再判定できません。
 
@@ -57,7 +57,7 @@
 
 ## 3ステップで始める
 
-<img src="images/three-steps.svg" alt="3ステップ: 一度だけインストールし、普通の言葉で一行言い、最後に信号を読む" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/three-steps.svg" alt="3ステップ: 一度だけインストールし、普通の言葉で一行言い、最後に信号を読む" width="100%" />
 
 ### ① 一度だけインストール
 
@@ -125,13 +125,13 @@ https://github.com/Evanciel/avalon をクローンして SKILL.md を読み、
 
 ## 実行はこう見える
 
-<img src="images/where-it-sits.svg" alt="あなたが一行の目標を渡すと、エージェントがリポジトリで働き、「完了しました」はAvalonのゲートを通ってしかあなたに届かない" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/where-it-sits.svg" alt="あなたが一行の目標を渡すと、エージェントがリポジトリで働き、「完了しました」はAvalonのゲートを通ってしかあなたに届かない" width="100%" />
 
 AvalonはAIエージェントを置き換えません — エージェントの「完了しました」とあなたの信頼のあいだに割り込みます。仕事は今まで通りエージェントが全部やり、その主張があなたに届く途中でゲートを通るだけです。
 
 あなたが打った一行から、追加の指示なしで:
 
-<img src="images/session-flow.svg" alt="実際のセッション: 一行渡すとエージェントが実測・設計し、ツールが判定し、未達ゲートはループバックし、不可逆ステップで承認を求め、最終報告にcompleted trueと空のabandonedが載る" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/session-flow.svg" alt="実際のセッション: 一行渡すとエージェントが実測・設計し、ツールが判定し、未達ゲートはループバックし、不可逆ステップで承認を求め、最終報告にcompleted trueと空のabandonedが載る" width="100%" />
 
 1. エージェントが `scaffold` を回し、グラフの草案を描き、何かをする前に4つの数字を見せます。
 2. ノードを1つずつ進めて測定値を提出し、ツールが合否を答えます。
@@ -152,13 +152,13 @@ AvalonはAIエージェントを置き換えません — エージェントの�
 
 ### 諦めは成功ではない
 
-<img src="images/abandon.svg" alt="リトライを使い切ったゲートは証拠をabandoned[]に残し、そのリストが空でない限り最終のcompletedは強制的にfalseになる" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/abandon.svg" alt="リトライを使い切ったゲートは証拠をabandoned[]に残し、そのリストが空でない限り最終のcompletedは強制的にfalseになる" width="100%" />
 
 ゲートが `on_exhaust: partial` でリトライを使い切ると、ワークフローは前へ進みます — ただし `{gate, node, field, op, threshold, measured, attempts}` を `abandoned[]` リストに記録し、そのリストが空でない限り最終の `completed` フラグは**強制的にfalse**になります。ゲートを飛ばした実行が自分を成功と報告する方法はありません。実行意味論のテストが、コンパイル出力を実際に実行してこれを固定しています。
 
 ### 仕様はインストールではない
 
-<img src="images/stop-hook.svg" alt="エージェントがターンを終えようとすると、hooks-gateがすべてのcheckを回す: 全部グリーンならターンが終わり、1つでも赤ならexit 2でブロックされ未達ゲートがモデルに返される" width="100%" />
+<img src="https://raw.githubusercontent.com/Evanciel/avalon/main/images/stop-hook.svg" alt="エージェントがターンを終えようとすると、hooks-gateがすべてのcheckを回す: 全部グリーンならターンが終わり、1つでも赤ならexit 2でブロックされ未達ゲートがモデルに返される" width="100%" />
 
 コンパイラは `build/hooks.json` — ゲートごとのcheckコマンドとexitコード契約 — を出力し、意図的にそこで止まります。インストールは別のツールが、別の人間の承認の下で行います。いったんインストールされれば、ゲートが赤い間、セッションは文字通りターンを終えられません。自動インストールは今も禁止です: 自分をセッションの強制レイヤーに黙って配線するツールこそ、このプロジェクトが防ぐために存在する種類の、説明のつかない魔法だからです。インストールされるまで仕様は何もブロックしません — そして完了報告には、その事実をこの言葉のまま書くことが求められます。
 
