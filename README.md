@@ -181,6 +181,37 @@ Any phrasing works ("avalon으로 진행해", "use the avalon procedure", …) �
 
 Your actual role: read the gate design once at step 1 (the thresholds are yours to argue), answer the approval question, and read four numbers at the end.
 
+### You don't need to be a developer
+
+If "search endpoint" meant nothing to you, that's fine — the command is just everyday language. Two situations, one example each:
+
+**Starting a project from scratch** — nothing exists yet. Say the goal, and add "check it actually works":
+
+```text
+Run this under avalon — build a website for my café from scratch:
+a menu page, directions, and a contact form. Check that all three actually work.
+```
+
+**Adding to something you're already building** — open Claude Code in that project's folder and ask. The agent measures what's already there (`scaffold`) before touching anything:
+
+```text
+Run this under avalon — add a booking feature to the site I've been building.
+Check that a new booking actually shows up in the list.
+```
+
+Other ways people phrase it:
+
+- A change you're scared of: *"Run this under avalon — fix the payment part. Ask me before anything that can't be undone."*
+- Leaving it overnight: *"Run this under avalon — work through this list while I sleep. If a gate fails, stop — don't gloss over it."*
+
+The numbers, gates, and graph are the agent's job to design. What it must do is show you the criteria **in plain words before starting** — "pressing send must increase stored messages by one; zero failed checks." Your part is three things:
+
+1. Read the criteria list before the run and say "yes, that's what done means."
+2. Answer when it asks "this step can't be undone — proceed?"
+3. Read the traffic lights at the end — four greens means done; anything in `abandoned` means "this part didn't make it, and here's the evidence."
+
+Things you will never touch: `graph.json` (the agent writes it), the commands (the agent runs them), the thresholds (the agent proposes them — you just say whether that's what *done* means to you).
+
 ### In GPT or any other agent
 
 Nothing in the harness is Claude-specific — the tools are six plain Node CLIs, no API keys, no vendor calls. Point any agent that can run shell commands at the procedure:
