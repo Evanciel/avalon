@@ -46,7 +46,9 @@ const eq = (a, b, what) => { if (a !== b) throw new Error(`${what}: ${JSON.strin
 
 // ── 픽스처 ─────────────────────────────────────────────────────────────────
 
-const DIR = mkdtempSync(join(process.env.CLAUDE_SELFTEST_TMP || 'A:/claude-temp', 'graphrun-'))
+const TMP_BASE = process.env.CLAUDE_SELFTEST_TMP
+  || (existsSync('A:/claude-temp') ? 'A:/claude-temp' : tmpdir())
+const DIR = mkdtempSync(join(TMP_BASE, 'graphrun-'))
 
 /**
  * a → (G1) → b ∥ c → j(join) → h(human)
