@@ -32,6 +32,10 @@ node tools/scaffold.mjs <대상경로> "<과제 한 줄>" graph.json
 - **게이트는 숫자다.** 서술형 게이트는 스키마가 표현 자체를 거부한다. `threshold_source`에
   그 숫자가 어디서 나왔는지 적는다 — 근거 없는 임계값은 장식이다.
 - **단위를 맞춘다.** `type: ratio`(0~1)에 임계값 90을 주면 영원히 통과하지 못한다. 실제로 있었던 버그다.
+- **게이트가 보는 필드마다 측정 명령을 단다** — `state[]` 항목에 `"measure": { "cmd": "<명령>", "pattern": "<그룹 1개 정규식>" }`.
+  그러면 러너가 직접 돌리고(`measure <필드> --run`) 손으로 친 숫자는 거부한다. 이게 없으면 값은 에이전트의
+  말(`source: reported`)이다 — 아발론이 없애려는 자기채점 그 자체다. `pattern`이 없으면 stdout의 비어 있지 않은
+  마지막 줄이 숫자여야 한다.
 - 되돌릴 수 없는 노드에는 `policy.requires_approval: true`를 단다. **산출 코드가 그 지점에서 실제로 멈춘다.**
 - 훅으로 강제할 게이트는 `host.enforced_by_hook`에 `{ "gate": "<id>", "check": "<명령>" }`으로
   선언한다. check는 게이트 미달 시 exit≠0이어야 한다 — **기계 없는 선언은 hook_loss로 잡힌다.**
@@ -77,7 +81,9 @@ Workflow({ scriptPath: "build/graph.workflow.js",
 node tools/run.mjs graph.json init      # 상태 생성 (그래프 수정 후에는 init --force)
 node tools/run.mjs graph.json next      # 지금 할 수 있는 것
 node tools/run.mjs graph.json start <node>
-node tools/run.mjs graph.json measure <field> <value> [메모]
+node tools/run.mjs graph.json measure <field> --run          # state[].measure.cmd 실행 (source: declared)
+node tools/run.mjs graph.json measure <field> --run "<명령>"  # 선언 없는 필드만 (source: adhoc)
+node tools/run.mjs graph.json measure <field> <value> [메모]  # 손입력 (source: reported) — 명령을 선언한 필드는 거부
 node tools/run.mjs graph.json done <node>   # 게이트 판정은 도구만 내린다
 node tools/run.mjs graph.json verify    # 원장 해시 체인 검증 (변조·절단 탐지)
 ```
@@ -86,6 +92,10 @@ node tools/run.mjs graph.json verify    # 원장 해시 체인 검증 (변조·�
 필드는 done이 거부되며, 모든 측정은 원장에 append-only로 남는다. 원장 각 줄은 **해시 체인**으로
 엮인다(`h`/`prev` + 상태의 `ledger_head`) — 과거 줄을 고치거나 지우거나 순서를 바꾸면 모든
 명령이 거부한다. 그래프 해시가 바뀌면 상태가 STALE로 표시된다 — 조용히 이어가지 않는다.
+측정과 게이트 결과마다 `source`(`declared` · `adhoc` · `reported`)가 실린다. 선언된 명령은 그래프 해시가 덮어서,
+`init` 뒤에 바꿔 끼우면 STALE이고 `--run`이 거부한다. 실패한 측정(숫자 없음·시간 초과)은 `measure_failed`로
+원장에 남는다 — 초록이 나올 때까지 몰래 다시 돌리는 게 보인다.
+**출처를 보고에 쓴다.** `reported` 값으로 통과한 게이트는 측정이 아니라 에이전트의 말이다.
 
 ## 완료 판정 — 포기는 성공이 아니다
 

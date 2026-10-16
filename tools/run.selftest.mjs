@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import {
   loadGraph, loadState, saveState, cmdStart, cmdMeasure, cmdDone,
   lintOrTrap, staleness, stateFileFor, freshState, evaluateGate, main, verifyLedger,
+  cmdMeasureRun, extractValue,
 } from './run.mjs'
 
 // 이 스위트의 단정은 한국어 메시지에 걸려 있다 — ko 로 고정한다 (기본 언어는 영어).
@@ -512,6 +513,134 @@ ok('체인 도입 전 유산 줄(h 없음)이 앞에 있어도 이어서 돈다'
   const v = verifyLedger(ctx, loadState(ctx))
   if (!v.ok) throw new Error('유산 줄을 위반으로 잡았다: ' + v.problems.join(' / '))
   if (v.chained < 2) throw new Error('체인이 시작되지 않았다')
+})
+
+console.log('\n== INV-6  측정 명령은 러너가 돌린다 — 손으로 친 숫자·바꿔 낀 명령은 거부 ==')
+
+// 측정 명령은 진짜 프로세스로 돈다 — 스텁이 아니다. node 자신을 쓰면 OS 마다 같은 명령이 된다.
+const say = js => `"${process.execPath}" -e "${js}"`
+const withMeasure = (cmd, extra = {}) => ({ patch: { state: [
+  { field: 'count', type: 'int', unit: 'count', measure: { cmd, ...extra } },
+  { field: 'rate', type: 'ratio', unit: 'ratio' },
+  { field: 'bcount', type: 'int', unit: 'count' },
+] } })
+const bootM = (name, cmd, extra) => {
+  const ctx = fixture({ name, ...withMeasure(cmd, extra) })
+  const s = loadState(ctx, { create: true })
+  cmdStart(ctx, s, 'a')
+  return { ctx, s }
+}
+const lastRow = ctx => JSON.parse(readFileSync(ledOf(ctx), 'utf8').trim().split('\n').pop())
+
+ok('★ 선언된 명령을 러너가 돌려 값을 기록한다 — source: declared, 증거는 원장에', () => {
+  const { ctx, s } = bootM('m1', say("console.log('building...');console.log(5)"))
+  cmdMeasureRun(ctx, s, 'count')
+  eq(s.measured.count.value, 5, '값'); eq(s.measured.count.source, 'declared', '출처')
+  const row = lastRow(ctx)
+  eq(row.action, 'measure', '원장 행'); eq(row.exit, 0, '종료코드')
+  if (!String(row.out_sha).startsWith('sha256:') || !row.cmd.includes('console.log(5)')) throw new Error('원장에 명령·출력 해시가 없다')
+  const r = cmdDone(ctx, s, 'a')
+  eq(r.results[0].verdict, 'pass', '판정'); eq(r.results[0].source, 'declared', '게이트 결과의 출처')
+  if (!verifyLedger(ctx, loadState(ctx)).ok) throw new Error('증거가 실린 원장의 체인이 깨졌다')
+})
+
+rejects('★ 선언된 필드에 손으로 친 숫자는 거부', () => {
+  const { ctx, s } = bootM('m2', say('console.log(5)'))
+  cmdMeasure(ctx, s, 'count', 5)
+}, '손으로 친 숫자는 거부')
+
+rejects('★ 선언된 필드에 다른 명령을 바꿔 끼우면 거부 (echo 오라클 차단)', () => {
+  const { ctx, s } = bootM('m3', say('console.log(1)'))
+  cmdMeasureRun(ctx, s, 'count', say('console.log(99)'))
+}, '바꿔 끼우는')
+
+ok('★ init 뒤에 graph.json 의 측정 명령을 바꾸면(STALE) --run 을 거부하고 아무것도 안 돌린다', () => {
+  bootM('m4', say('console.log(1)'))
+  const ctx2 = fixture({ name: 'm4', ...withMeasure(say('console.log(99)')) })   // 같은 경로에 오라클만 교체
+  const s2 = loadState(ctx2)
+  let threw = null
+  try { cmdMeasureRun(ctx2, s2, 'count') } catch (e) { threw = e }
+  if (!threw || !threw.message.includes('STALE')) throw new Error(`STALE 거부가 아니다: ${threw?.message}`)
+  if (s2.measured.count) throw new Error('교체된 오라클의 값이 기록됐다')
+  if (lastRow(ctx2).action !== 'start') throw new Error('거부 전에 명령이 돌았다')
+})
+
+ok('★ 숫자를 못 뽑으면 거부하고 measure_failed 를 원장에 남긴다 (몰래 재시도가 보인다)', () => {
+  const { ctx, s } = bootM('m5', say("console.log('all good')"))
+  let threw = null
+  try { cmdMeasureRun(ctx, s, 'count') } catch (e) { threw = e }
+  if (!threw) throw new Error('숫자 없는 출력을 받아들였다')
+  if (s.measured.count) throw new Error('실패한 측정이 값으로 남았다')
+  const row = lastRow(ctx)
+  eq(row.action, 'measure_failed', '원장 행'); eq(row.field, 'count', '필드')
+})
+
+ok('★ pattern 이 안 맞거나 출력이 비면 0 이 아니라 측정 실패다', () => {
+  for (const [name, cmd, extra] of [
+    ['m5b', say("console.log('passed: 9')"), { pattern: 'failed: (\\d+)' }],   // 실패 줄이 없다 ≠ 실패 0건
+    ['m5c', say('0'), {}],                                                    // 아무것도 안 찍는다
+  ]) {
+    const { ctx, s } = bootM(name, cmd, extra)
+    let threw = null
+    try { cmdMeasureRun(ctx, s, 'count') } catch (e) { threw = e }
+    if (!threw) throw new Error(`${name}: 값이 없는데 받아들였다 (값 ${s.measured.count?.value})`)
+    eq(lastRow(ctx).action, 'measure_failed', `${name} 원장 행`)
+  }
+})
+
+ok('pattern 은 <마지막> 일치의 1번 그룹을 쓴다', () => {
+  const { ctx, s } = bootM('m6', say("console.log('failed: 7');console.log('failed: 2');console.log('bye')"), { pattern: 'failed: (\\d+)' })
+  cmdMeasureRun(ctx, s, 'count')
+  eq(s.measured.count.value, 2, '값')
+})
+
+ok('종료코드≠0 이어도 값을 뽑으면 기록한다 — 종료코드는 증거로 남는다', () => {
+  const { ctx, s } = bootM('m7', say('console.log(4);process.exitCode=1'))
+  cmdMeasureRun(ctx, s, 'count')
+  eq(s.measured.count.value, 4, '값'); eq(s.measured.count.exit, 1, '종료코드')
+})
+
+rejects('시간 초과는 측정 실패다', () => {
+  const { ctx, s } = bootM('m8', say('setInterval(Date.now,1000)'), { timeout_ms: 300 })
+  cmdMeasureRun(ctx, s, 'count')
+}, '시간 초과')
+
+rejects('타입 검사는 명령이 낸 값에도 걸린다 (int 에 2.5)', () => {
+  const { ctx, s } = bootM('m9', say('console.log(2.5)'))
+  cmdMeasureRun(ctx, s, 'count')
+}, '정수여야')
+
+ok('선언 없는 필드는 즉석 명령으로 잴 수 있다 — source: adhoc, 명령이 남는다', () => {
+  const { ctx, s } = boot('m10')
+  cmdStart(ctx, s, 'a')
+  cmdMeasureRun(ctx, s, 'count', say('console.log(3)'))
+  eq(s.measured.count.source, 'adhoc', '출처')
+  if (!lastRow(ctx).cmd.includes('console.log(3)')) throw new Error('즉석 명령이 원장에 없다')
+})
+
+rejects('선언도 명령도 없으면 --run 거부', () => {
+  const { ctx, s } = boot('m11')
+  cmdMeasureRun(ctx, s, 'count')
+}, '선언이 없고')
+
+ok('손으로 친 값은 source: reported 로 게이트 결과까지 간다', () => {
+  const { ctx, s } = boot('m12')
+  cmdStart(ctx, s, 'a'); cmdMeasure(ctx, s, 'count', 5)
+  eq(cmdDone(ctx, s, 'a').results[0].source, 'reported', '출처')
+})
+
+await okA('CLI: measure <field> --run 이 선언 명령을 돌린다', async () => {
+  const ctx = fixture({ name: 'm13', ...withMeasure(say('console.log(6)')) })
+  eq(await runQuiet([ctx.graphPath, 'init']), 0, 'init')
+  eq(await runQuiet([ctx.graphPath, 'start', 'a']), 0, 'start')
+  eq(await runQuiet([ctx.graphPath, 'measure', 'count', '--run']), 0, 'measure --run')
+  const m = loadState(ctx).measured.count
+  eq(m.value, 6, '값'); eq(m.source, 'declared', '출처')
+})
+
+ok('extractValue: ANSI 색 코드를 걷고 마지막 줄을 쓴다', () => {
+  eq(extractValue('\x1b[32mok\x1b[0m\n\x1b[1m12\x1b[0m\n\n'), '12', '값')
+  eq(extractValue(''), null, '빈 출력')
 })
 
 // ── 결과 ───────────────────────────────────────────────────────────────────

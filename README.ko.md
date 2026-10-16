@@ -5,7 +5,7 @@
 **AI 에이전트의 "다 됐습니다"는 의견입니다. Avalon은 그것을 측정으로 바꿉니다.**<br/>
 일을 시작하기 전에 통과 조건을 숫자로 못 박고, 판정은 AI가 아니라 도구가 내리게 합니다.
 
-[![npm](https://img.shields.io/npm/v/avalon-skill?color=cb3837&logo=npm)](https://www.npmjs.com/package/avalon-skill) [![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-158%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![npm](https://img.shields.io/npm/v/avalon-skill?color=cb3837&logo=npm)](https://www.npmjs.com/package/avalon-skill) [![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-175%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · **한국어** · [日本語](README.ja.md) · [简体中文](README.zh.md)
 
@@ -264,13 +264,14 @@ node tools/run.mjs graph.json next            # what can be worked on right now
 node tools/run.mjs graph.json status          # whole picture, including gates that never ran
 node tools/run.mjs graph.json start <node>    # refused if the node isn't in the frontier
 node tools/run.mjs graph.json measure <field> <value> [note]
+node tools/run.mjs graph.json measure <field> --run   # state[].measure.cmd 를 러너가 직접 실행 — 숫자를 치는 건 당신이 아니다
 node tools/run.mjs graph.json done <node>     # the tool decides pass/fail, not you
 node tools/run.mjs graph.json verify          # ledger hash-chain check (tamper / truncation)
 node tools/run.mjs graph.json abort           # cancel the active node
 node tools/run.mjs graph.json lint            # OR-trap check (2+ gates on one node)
 ```
 
-모든 명령에 기계용 출력 `--json`이 있습니다. 러너는 사실상 "안 되는 일 목록"이고, 네 가지 불변식(INV-1~4, [run.mjs](tools/run.mjs))에서 나옵니다:
+모든 명령에 기계용 출력 `--json`이 있습니다. 러너는 사실상 "안 되는 일 목록"이고, 불변식(INV-1~6, [run.mjs](tools/run.mjs))에서 나옵니다:
 
 | 이렇게 하면 | 러너의 답 |
 |---|---|
@@ -279,8 +280,11 @@ node tools/run.mjs graph.json lint            # OR-trap check (2+ gates on one n
 | 그래프에 선언 안 된 필드를 `measure` | 거부 — 선언 없는 필드를 재는 건 절차를 갖춘 추측일 뿐이다 |
 | `init` 후에 그래프를 고치고 계속 진행 | **STALE** 표시 — 상태는 자기가 어느 그래프 해시에서 태어났는지 기억한다 |
 | 게이트를 `max_retry`보다 많이 실패 | **중단** — 실행이 멈추고 결정이 사람에게 넘어간다 |
+| `state[].measure`로 명령을 선언한 필드에 숫자를 손으로 입력 | 거부 — `measure <필드> --run`으로 러너가 선언된 명령을 직접 돌린다. 다른 명령으로 바꿔 끼우거나 `init` 후에 고치면(STALE) 그것도 거부 |
 
 수락된 측정은 전부 원장에 덧붙습니다. 원장의 어떤 것도 고쳐 쓰이지 않습니다 — `init --force`조차 상태만 버리지 원장은 남깁니다. 그리고 원장은 스스로를 방어합니다: [증거는 스스로를 방어한다](#증거는-스스로를-방어한다) 참조.
+
+측정마다 **숫자가 어디서 왔는지**도 남습니다 — `declared`(일을 시작하기 전에 그래프에 박아 둔 명령을 러너가 돌림), `adhoc`(그 자리에서 준 명령을 러너가 돌림 — 명령·종료코드·출력 해시가 남음), `reported`(손으로 입력). 게이트 결과에도 이 출처가 실리고, `ground_truth: measured`라 선언한 게이트에 손으로 친 값이 들어오면 ⚠로 표시됩니다. 선언은 `{ "field": "tests_failed", "type": "int", "measure": { "cmd": "npm test", "pattern": "failed: (\d+)" } }` 꼴입니다 — `pattern`이 없으면 stdout의 비어 있지 않은 마지막 줄이 숫자여야 합니다. 종료코드≠0은 괜찮고(테스트 러너는 실패를 보고하며 1로 끝납니다), 숫자를 못 뽑으면 측정 실패이며 그 실패도 원장에 남습니다.
 
 도구 메시지는 기본이 영어입니다. 시스템 로케일이 한국어이거나 `AVALON_LANG=ko`를 주면 한국어로 나옵니다. 빌드 산출물은 항상 영어입니다 — 바이트가 해시되므로 환경에 따라 달라지면 안 되기 때문입니다.
 
@@ -505,10 +509,10 @@ loss가 0이 아니라는 건 "선언만 있고 강제하는 게 없다"는 뜻�
 
 ## 테스트 방법
 
-`npm test` 하나로 도는 세 스위트, 합계 158건:
+`npm test` 하나로 도는 세 스위트, 합계 175건:
 
-- **[test.mjs](tools/test.mjs) (93건)** — 스키마와 컴파일러 동작, 그리고 **실행 의미론**: 컴파일된 워크플로 산출물을 스텁 호스트에서 실제로 실행합니다. "abandoned가 비어 있지 않으면 completed는 false" 같은 주장이 단언이 아니라 시연됩니다. 여기 새로 실린 것이 **지문 변별력**입니다 — 같은 저장소를 두 번 스캐폴드하면 바이트까지 같은 지문이 나와야 하고, 다른 저장소 둘에서는 달라야 합니다. 실제 scaffold 실행으로 실측하며, 지문의 변별력은 이 테스트들 전까지 *미검증* 주장이었습니다. 배포 동기화 게이트는 런타임 파일 9개를 설치된 스킬 사본과 바이트 대조해서, 저장소와 배포본이 조용히 어긋나는 걸 막습니다.
-- **[run.selftest.mjs](tools/run.selftest.mjs) (41건)** — 러너의 거부 방어벽을, 방어벽의 존재를 증명하는 유일한 방법으로 테스트합니다: *가드를 지우면 스위트가 빨개져야 한다.* 각 테스트는 금지된 상황(프론티어 밖 start, 측정 없는 done, 그래프 고치고 계속)을 구성하고, 러너가 거부해야만 통과합니다. 원장 체인 테스트는 진짜 원장을 공격합니다 — 과거 측정을 수정하고, 꼬리를 절단하고, 체인을 우회해 덧붙입니다 — 그리고 모든 명령이 거부해야만 통과합니다.
+- **[test.mjs](tools/test.mjs) (95건)** — 스키마와 컴파일러 동작, 그리고 **실행 의미론**: 컴파일된 워크플로 산출물을 스텁 호스트에서 실제로 실행합니다. "abandoned가 비어 있지 않으면 completed는 false" 같은 주장이 단언이 아니라 시연됩니다. 여기 새로 실린 것이 **지문 변별력**입니다 — 같은 저장소를 두 번 스캐폴드하면 바이트까지 같은 지문이 나와야 하고, 다른 저장소 둘에서는 달라야 합니다. 실제 scaffold 실행으로 실측하며, 지문의 변별력은 이 테스트들 전까지 *미검증* 주장이었습니다. 배포 동기화 게이트는 런타임 파일 9개를 설치된 스킬 사본과 바이트 대조해서, 저장소와 배포본이 조용히 어긋나는 걸 막습니다.
+- **[run.selftest.mjs](tools/run.selftest.mjs) (56건)** — 러너의 거부 방어벽을, 방어벽의 존재를 증명하는 유일한 방법으로 테스트합니다: *가드를 지우면 스위트가 빨개져야 한다.* 각 테스트는 금지된 상황(프론티어 밖 start, 측정 없는 done, 그래프 고치고 계속)을 구성하고, 러너가 거부해야만 통과합니다. 원장 체인 테스트는 진짜 원장을 공격합니다 — 과거 측정을 수정하고, 꼬리를 절단하고, 체인을 우회해 덧붙입니다 — 그리고 모든 명령이 거부해야만 통과합니다.
 - **[install.selftest.mjs](tools/install.selftest.mjs) (24건)** — 설치자의 경계를 같은 방법으로: `--yes` 없이 쓰기 금지, 전역 settings 거부, 낡은 명세 거부, 남의 훅 보존, 멱등 재설치, 그리고 게이트의 미달·STALE 차단(exit 2). 3건은 TOCTOU 공격 시나리오입니다: 승인 *뒤에* `build/hooks.json`을 바꿔치기합니다 — check를 악성 명령으로 교체하고, 그래프째 말이 되게 재생성까지 해봅니다 — 게이트가 **아무것도 실행하지 않고** 차단해야만 통과합니다(심어둔 명령이 안 돌았음을 마커 파일로 증명). 나머지는 프로브 방어벽(실패할 수 없는 오라클은 장식으로 보고 거부), `--status`가 쓰지 않고 읽기만 하는 것, 그리고 기본 언어가 실제로 영어라는 것을 고정합니다.
 
 CI는 ubuntu와 windows에서 세 스위트를 전부 돌립니다. 줄바꿈은 [.gitattributes](.gitattributes)로 LF에 고정했습니다 — G0b가 바이트 단위 오라클이라, CRLF 체크아웃은 엄밀히 다른 문서이기 때문입니다.
@@ -529,8 +533,8 @@ tools/
   install-hooks.mjs      approval-gated hook installer (project settings only)
   hooks-gate.mjs         Stop-hook enforcer — red gate blocks ending the turn
   fixtures/              committed broken inputs — what the probes aim at
-  test.mjs               schema / compiler / execution-semantics / fingerprint tests (93)
-  run.selftest.mjs       runner self-test — "does removing a guard turn it red?" (41)
+  test.mjs               schema / compiler / execution-semantics / fingerprint tests (95)
+  run.selftest.mjs       runner self-test — "does removing a guard turn it red?" (56)
   install.selftest.mjs   installer/gate self-test — approval, probe, tamper walls (24)
 docs/graph/              design history, IR spec, the scar records above
 images/                  the diagrams in this README

@@ -254,6 +254,28 @@ export const CHECKS = [
   [t('edge reference integrity', '엣지 참조 무결성'), checkEdgeIntegrity],
 ]
 
+/**
+ * state[].measure — 러너가 돌릴 측정 오라클 (run.mjs INV-6).
+ * 선택이지만, 선언했다면 실제로 돌 수 있는 모양이어야 한다 — 못 도는 오라클은 선언하지 않은 것보다 나쁘다.
+ */
+function measureViolations(s) {
+  const m = s?.measure
+  if (m === undefined) return []
+  const at = `state ${s.field}: measure`
+  if (!m || typeof m !== 'object' || Array.isArray(m)) return [t(`${at} must be an object { "cmd": "<command>" }`, `${at} 는 { "cmd": "<명령>" } 객체여야 한다`)]
+  const out = []
+  if (typeof m.cmd !== 'string' || !m.cmd.trim()) out.push(t(`${at}.cmd must be a non-empty command string`, `${at}.cmd 는 비어 있지 않은 명령 문자열이어야 한다`))
+  if (m.pattern !== undefined) {
+    let groups = -1
+    try { groups = new RegExp(`${m.pattern}|`).exec('').length - 1 } catch { /* 컴파일 불가 */ }
+    if (typeof m.pattern !== 'string' || groups < 0) out.push(t(`${at}.pattern does not compile as a regular expression`, `${at}.pattern 이 정규식으로 컴파일되지 않는다`))
+    else if (groups < 1) out.push(t(`${at}.pattern needs a capture group — the value is group 1 of the last match`, `${at}.pattern 에 캡처 그룹이 필요하다 — 값은 마지막 일치의 1번 그룹이다`))
+  }
+  if (m.timeout_ms !== undefined && !(Number.isInteger(m.timeout_ms) && m.timeout_ms > 0)) out.push(t(`${at}.timeout_ms must be a positive integer`, `${at}.timeout_ms 는 양의 정수여야 한다`))
+  if (m.cwd !== undefined && (typeof m.cwd !== 'string' || !m.cwd.trim())) out.push(t(`${at}.cwd must be a non-empty path (relative to graph.json)`, `${at}.cwd 는 비어 있지 않은 경로여야 한다 (graph.json 기준)`))
+  return out
+}
+
 /** 서술형 게이트 차단 — threshold가 수치 리터럴이 아니면 스키마 위반 */
 function checkNumericGates(g) {
   return (g.gates ?? [])
@@ -300,6 +322,7 @@ export function validate(graph) {
     ...(graph.state ?? [])
       .filter((s) => s.unit !== undefined && !VALID_UNITS.has(s.unit))
       .map((s) => t(`state ${s.field}: unit '${s.unit}' invalid (count|percent|ratio|ms|usd|none)`, `state ${s.field}: unit '${s.unit}' 무효 (count|percent|ratio|ms|usd|none)`)),
+    ...(graph.state ?? []).flatMap((s) => measureViolations(s)),
     ...hookEntries
       .filter((e) => !e.id)
       .map(() => t(`host.enforced_by_hook: entry without gate id — must be of the form { "gate": "<id>", "check": "<command>" }`, `host.enforced_by_hook: gate id 없는 항목 — { "gate": "<id>", "check": "<명령>" } 형태여야 한다`)),

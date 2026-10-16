@@ -157,6 +157,25 @@
 `type`: `int` · `ratio`(0~1) · `bool` · `enum`.
 **게이트는 이 목록 밖의 필드를 참조할 수 없다.** 검증기가 강제한다(정적 검사 #1).
 
+선택 필드 `measure` — 러너가 돌릴 측정 오라클 (run.mjs INV-6, 2026-10-16):
+
+```json
+{ "field": "tests_failed", "type": "int",
+  "measure": { "cmd": "npm test", "pattern": "failed: (\d+)", "timeout_ms": 600000, "cwd": ".." } }
+```
+
+| 키 | 필수 | 뜻 |
+|---|---|---|
+| `cmd` | ✓ | 셸 명령. cwd 기본값은 graph.json 이 있는 폴더(hooks-gate.mjs 와 같다) |
+| `pattern` | | 값 = stdout 에서 이 정규식의 **마지막** 일치의 1번 그룹. 없으면 비어 있지 않은 마지막 줄 전체 |
+| `timeout_ms` | | 기본 600000. 넘으면 측정 실패 |
+| `cwd` | | graph.json 기준 상대경로 |
+
+- 선언한 필드는 `measure <field> --run` 으로만 잰다. 손입력·다른 명령 바꿔 끼우기는 거부.
+- `cmd` 는 그래프 해시에 들어간다 → `init` 뒤에 바꾸면 STALE → `--run` 거부.
+- 종료코드≠0 은 실패가 아니다. 값을 못 뽑으면 실패이고, 실패도 원장(`measure_failed`)에 남는다.
+- 검증기는 빈 `cmd`, 컴파일 안 되는 `pattern`, 캡처 그룹 없는 `pattern`, 양의 정수가 아닌 `timeout_ms` 를 스키마 위반으로 세운다.
+
 ### `nodes`
 
 ```json

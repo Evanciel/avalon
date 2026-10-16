@@ -5,7 +5,7 @@
 **AI 智能体的"完成了"只是一个意见。Avalon 把它变成一次测量。**<br/>
 在开工之前就把通过条件钉成数字。裁决交给工具，而不是 AI 自己。
 
-[![npm](https://img.shields.io/npm/v/avalon-skill?color=cb3837&logo=npm)](https://www.npmjs.com/package/avalon-skill) [![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-158%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![npm](https://img.shields.io/npm/v/avalon-skill?color=cb3837&logo=npm)](https://www.npmjs.com/package/avalon-skill) [![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-175%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · **简体中文**
 
@@ -256,13 +256,14 @@ node tools/run.mjs graph.json next            # what can be worked on right now
 node tools/run.mjs graph.json status          # whole picture, including gates that never ran
 node tools/run.mjs graph.json start <node>    # refused if the node isn't in the frontier
 node tools/run.mjs graph.json measure <field> <value> [note]
+node tools/run.mjs graph.json measure <field> --run   # 由运行器亲自执行 state[].measure.cmd — 填数字的不是你
 node tools/run.mjs graph.json done <node>     # the tool decides pass/fail, not you
 node tools/run.mjs graph.json verify          # ledger hash-chain check (tamper / truncation)
 node tools/run.mjs graph.json abort           # cancel the active node
 node tools/run.mjs graph.json lint            # OR-trap check (2+ gates on one node)
 ```
 
-每个命令都支持机器可读输出 `--json`。运行器基本上就是一份"不许发生的事"清单 — 四条不变式（INV-1 到 INV-4，见 [run.mjs](tools/run.mjs)）：
+每个命令都支持机器可读输出 `--json`。运行器基本上就是一份"不许发生的事"清单 — 不变式（INV-1 到 INV-6，见 [run.mjs](tools/run.mjs)）：
 
 | 你尝试 | 运行器的回答 |
 |---|---|
@@ -271,8 +272,11 @@ node tools/run.mjs graph.json lint            # OR-trap check (2+ gates on one n
 | `measure` 一个图里从未声明的字段 | 拒绝 — 测量未声明的字段，不过是走了流程的瞎猜 |
 | `init` 之后改图继续跑 | 标记 **STALE** — 状态记得自己是从哪个图哈希生出来的 |
 | 门失败次数超过 `max_retry` | **停机** — 运行停止，决定权交还给人 |
+| 给用 `state[].measure` 声明了命令的字段手填数字 | 拒绝 — `measure <field> --run` 让运行器亲自执行声明的命令；换成别的命令、或 `init` 之后改命令（STALE），同样拒绝 |
 
 每条被接受的测量都追加到台账。台账里的任何内容都永不改写 — 就连 `init --force` 也只丢弃状态、保留台账。而且台账会自卫：见[证据会自卫](#证据会自卫)。
+
+每次测量还会记下**数字从哪来** — `declared`（运行器执行开工前就固定在图里的命令）、`adhoc`（运行器执行当场给出的命令 — 命令、退出码、输出哈希都留存）、`reported`（手填）。门的结果也带着这个来源；声明 `ground_truth: measured` 的门如果喂进手填的值，会被标 ⚠。声明形如 `{ "field": "tests_failed", "type": "int", "measure": { "cmd": "npm test", "pattern": "failed: (\d+)" } }` — 没有 `pattern` 时，stdout 最后一个非空行必须是数字。退出码≠0 没关系（测试运行器报告失败时以 1 退出）；取不到数字就是测量失败，这次失败同样记入台账。
 
 工具消息默认英文；韩语系统区域（或 `AVALON_LANG=ko`）会切换成韩文（中文暂未提供）。构建产物永远是英文 — 它们的字节参与哈希，不能依赖环境。
 
@@ -501,10 +505,10 @@ approval required — after user confirmation: same command with --yes    (exit 
 
 ## 如何测试
 
-158 个测试，分三个套件，`npm test` 一条命令全跑：
+175 个测试，分三个套件，`npm test` 一条命令全跑：
 
-- **[test.mjs](tools/test.mjs)（93 个）** — 模式和编译器行为，包括**执行语义**：编译出的工作流产物在打桩的宿主上被真正执行，所以"abandoned 非空时 completed 为 false"这类主张是演示出来的，不是断言出来的。新增：**指纹辨别力** — 同一个仓库 scaffold 两次，指纹必须逐字节相同；两个不同的仓库，指纹必须不同 — 用真实的 scaffold 运行实测。在这些测试之前，指纹的辨别力一直是个*未经验证*的主张。部署同步门把 9 个运行时文件与已安装的技能副本逐字节比对，仓库和部署版无法悄悄漂移。
-- **[run.selftest.mjs](tools/run.selftest.mjs)（41 个）** — 用唯一能证明护栏存在的方法测试运行器的拒绝墙：*删掉护栏，套件必须变红。* 每个测试构造一种被禁止的局面（跳前沿集的 start、没测量的 done、改图继续跑），只有运行器拒绝了才算通过。台账链测试攻击的是真实台账 — 改写过去的测量、截断尾部、绕过链追加 — 只有当所有命令都拒绝时才算通过。
+- **[test.mjs](tools/test.mjs)（95 个）** — 模式和编译器行为，包括**执行语义**：编译出的工作流产物在打桩的宿主上被真正执行，所以"abandoned 非空时 completed 为 false"这类主张是演示出来的，不是断言出来的。新增：**指纹辨别力** — 同一个仓库 scaffold 两次，指纹必须逐字节相同；两个不同的仓库，指纹必须不同 — 用真实的 scaffold 运行实测。在这些测试之前，指纹的辨别力一直是个*未经验证*的主张。部署同步门把 9 个运行时文件与已安装的技能副本逐字节比对，仓库和部署版无法悄悄漂移。
+- **[run.selftest.mjs](tools/run.selftest.mjs)（56 个）** — 用唯一能证明护栏存在的方法测试运行器的拒绝墙：*删掉护栏，套件必须变红。* 每个测试构造一种被禁止的局面（跳前沿集的 start、没测量的 done、改图继续跑），只有运行器拒绝了才算通过。台账链测试攻击的是真实台账 — 改写过去的测量、截断尾部、绕过链追加 — 只有当所有命令都拒绝时才算通过。
 - **[install.selftest.mjs](tools/install.selftest.mjs)（24 个）** — 用同样的方法测安装器的边界：无 `--yes` 不写、拒绝全局、拒绝过期规格、保留他人钩子、幂等重装，以及门在不合格与 STALE 时的拦截（exit 2）。其中 3 个是 TOCTOU 攻击场景：在审批*之后*篡改 `build/hooks.json` — 把 check 换成恶意命令，甚至连图带规格一致地重新生成 — 只有门**什么都不执行**就拦下时才算通过（用标记文件证明植入的命令从未运行）。其余的钉住探针之墙（不可能失败的判据按装饰拒绝）、`--status` 只读不写，以及默认语言确实是英文。
 
 CI 在 ubuntu 和 windows 上都会跑这些套件。换行符通过 [.gitattributes](.gitattributes) 钉死为 LF — 因为 G0b 是逐字节的判据，CRLF 检出严格来说就是另一份文档。
@@ -525,8 +529,8 @@ tools/
   install-hooks.mjs      带审批门的钩子安装器（仅限项目 settings）
   hooks-gate.mjs         Stop 钩子执行者 — 红灯的门拦截回合结束
   fixtures/              已提交的损坏输入 — 探针的靶子
-  test.mjs               模式 / 编译器 / 执行语义 / 指纹测试（93 个）
-  run.selftest.mjs       运行器自检 — "删掉护栏会变红吗"（41 个）
+  test.mjs               模式 / 编译器 / 执行语义 / 指纹测试（95 个）
+  run.selftest.mjs       运行器自检 — "删掉护栏会变红吗"（56 个）
   install.selftest.mjs   安装器/门自检 — 审批·探针·防篡改之墙（24 个）
 docs/graph/              设计史、IR 规格、上述伤疤的原始记录
 images/                  本 README 的示意图

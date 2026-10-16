@@ -11,11 +11,14 @@
  * INV-3  게이트가 참조하는 필드를 <이번 방문에> 재지 않았으면 done 이 거부된다.
  * INV-4  모든 측정은 원장(ledger)에 append-only 로 남는다.
  * INV-5  그래프 해시가 바뀌면 상태가 stale 임을 알린다 (조용히 이어가지 않는다).
+ * INV-6  state[].measure 로 측정 명령을 선언한 필드는 <러너가 그 명령을 돌려서만> 잰다.
+ *        손으로 친 숫자도, 그 자리에서 바꿔 낀 명령도 거부한다. 출처는 측정마다 남는다.
  *
  * 의존성 없음. 네트워크 없음. node >= 18.
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, rmSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { specHash, sha256, canonical } from './hash.mjs'
 import { dirname, resolve, isAbsolute } from 'node:path'
 import { t } from './i18n.mjs'
@@ -144,8 +147,8 @@ export function freshState (ctx, now = new Date().toISOString()) {
     active: null,
     active_visit: null,
     completed: {},   // nodeId -> 방문 횟수
-    measured: {},    // field -> { value, note, at, node, visit }
-    gate_runs: [],   // { gate, field, value, op, threshold, verdict, ground_truth, at, node }
+    measured: {},    // field -> { value, note, at, node, visit, source, cmd?, exit?, out_sha? }
+    gate_runs: [],   // { gate, field, value, op, threshold, verdict, ground_truth, source, at, node }
     gate_fails: {},  // gateId -> 누적 fail (on_fail.max_retry 와 대조)
     node_runs: {},   // nodeId -> 착수 횟수 (retry.max 와 대조)
     halted: null,
@@ -243,28 +246,136 @@ export function cmdStart (ctx, s, nodeId) {
   return s
 }
 
-export function cmdMeasure (ctx, s, field, raw, note) {
+function requireField (ctx, field) {
   if (!ctx.fields.has(field)) {
     throw new Error(
       t(`🔴 field not declared in state[]: ${field}\n`, `🔴 state[] 에 없는 필드다: ${field}\n`) +
       t(`   declared fields: ${[...ctx.fields.keys()].join(', ')}\n`, `   선언된 필드: ${[...ctx.fields.keys()].join(', ')}\n`) +
       t('   ★Measuring an undeclared field is guessing. Declare it in graph.json state[] first.', '   ★없는 필드를 재는 것은 추측이다. graph.json 의 state[] 에 먼저 선언하라.'))
   }
-  const spec = ctx.fields.get(field)
+  return ctx.fields.get(field)
+}
+
+/** 값 검사 — 손으로 친 값이든 명령이 낸 값이든 같은 문턱을 지난다. */
+function parseValue (spec, field, raw) {
   const value = Number(raw)
-  if (raw === undefined || raw === '' || !Number.isFinite(value)) throw new Error(t(`not a number: ${field}=${raw}`, `숫자가 아니다: ${field}=${raw}`))
+  if (raw === undefined || raw === null || String(raw).trim() === '' || !Number.isFinite(value)) throw new Error(t(`not a number: ${field}=${raw}`, `숫자가 아니다: ${field}=${raw}`))
   if (spec.type === 'int' && !Number.isInteger(value)) throw new Error(t(`must be an integer: ${field}=${raw}`, `정수여야 한다: ${field}=${raw}`))
   if (spec.type === 'ratio' && (value < 0 || value > 1)) throw new Error(t(`ratio must be within 0~1: ${field}=${raw}`, `ratio 는 0~1 이다: ${field}=${raw}`))
+  return value
+}
 
+function record (ctx, s, field, value, note, evidence) {
   s.measured[field] = {
     value,
     note: note ?? '',
     at: new Date().toISOString(),
     node: s.active ?? null,
     visit: s.active ? s.active_visit : null,
+    source: evidence.source,
+    ...(evidence.cmd !== undefined ? { cmd: evidence.cmd, exit: evidence.exit, out_sha: evidence.out_sha } : {}),
   }
-  saveState(ctx, s, 'measure', { field, value, note: note ?? '', node: s.active ?? null })
+  saveState(ctx, s, 'measure', { field, value, note: note ?? '', node: s.active ?? null, ...evidence })
   return s
+}
+
+/** 손으로 친 측정 — source: reported. 측정 명령을 선언한 필드에는 쓸 수 없다 (INV-6). */
+export function cmdMeasure (ctx, s, field, raw, note) {
+  const spec = requireField(ctx, field)
+  if (spec.measure) {
+    throw new Error(
+      t(`🔴 ${field} declares a measurement command — a typed number is refused\n`, `🔴 ${field} 는 측정 명령을 선언했다 — 손으로 친 숫자는 거부한다\n`) +
+      t(`   declared: ${spec.measure.cmd}\n`, `   선언된 명령: ${spec.measure.cmd}\n`) +
+      t(`   → run.mjs <graph> measure ${field} --run`, `   → run.mjs <graph> measure ${field} --run`))
+  }
+  return record(ctx, s, field, parseValue(spec, field, raw), note, { source: 'reported' })
+}
+
+const ANSI_RE = /\x1b\[[0-9;?]*[A-Za-z]/g   // eslint-disable-line no-control-regex
+const TAIL = 400
+
+/**
+ * 명령 출력에서 값 하나를 뽑는다. 결정적이다:
+ *   pattern 이 있으면 — 그 정규식의 <마지막> 일치의 1번 캡처 (요약 줄은 대개 끝에 있다).
+ *   없으면 — 비어 있지 않은 <마지막 줄> 전체. 그 줄이 숫자가 아니면 측정 실패다.
+ */
+export function extractValue (stdout, pattern) {
+  const text = String(stdout ?? '').replace(ANSI_RE, '')
+  if (pattern) {
+    const hits = [...text.matchAll(new RegExp(pattern, 'gm'))]
+    const last = hits[hits.length - 1]
+    return last?.[1] !== undefined ? last[1].trim() : null
+  }
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  return lines.length ? lines[lines.length - 1] : null
+}
+
+/**
+ * INV-6 — 러너가 명령을 돌려서 잰다.
+ *   선언형(source: declared): state[].measure.cmd. graph.json 안에 있어 그래프 해시가 덮는다 —
+ *     init 뒤에 명령을 바꿔 끼우면 STALE 이고, STALE 위의 선언형 측정은 거부한다.
+ *   즉석형(source: adhoc): 선언이 없는 필드에 한해 명령을 그 자리에서 준다. 명령·종료코드·출력
+ *     해시가 원장에 남아 사후 검토는 되지만, 오라클을 고른 쪽이 일하는 쪽이다 — 그래서 등급이 낮다.
+ * 종료코드≠0 은 실패가 아니다(테스트 러너는 실패 건수를 내며 1로 끝난다). 값을 못 뽑으면 실패다.
+ * 실패한 측정도 원장에 measure_failed 로 남는다 — 될 때까지 몰래 다시 돌리는 것이 보인다.
+ */
+export function cmdMeasureRun (ctx, s, field, adhocCmd = null) {
+  const spec = requireField(ctx, field)
+  const declared = spec.measure ?? null
+  if (declared && adhocCmd) {
+    throw new Error(
+      t(`🔴 ${field} declares a measurement command — substituting another is refused\n`, `🔴 ${field} 는 측정 명령을 선언했다 — 다른 명령으로 바꿔 끼우는 것은 거부한다\n`) +
+      t(`   declared: ${declared.cmd}\n   given:    ${adhocCmd}\n`, `   선언: ${declared.cmd}\n   제시: ${adhocCmd}\n`) +
+      t('   ★The oracle was fixed before the work began. To change it, edit graph.json → re-validate → init --force.', '   ★오라클은 일을 시작하기 전에 정해졌다. 바꾸려면 graph.json 수정 → 재검증 → init --force.'))
+  }
+  if (!declared && !adhocCmd) {
+    throw new Error(
+      t(`🔴 ${field} declares no state[].measure.cmd and no command was given\n`, `🔴 ${field} 에는 state[].measure.cmd 선언이 없고 명령도 주지 않았다\n`) +
+      t(`   → declare it in graph.json, or: run.mjs <graph> measure ${field} --run "<command>"`, `   → graph.json 에 선언하거나: run.mjs <graph> measure ${field} --run "<명령>"`))
+  }
+  if (declared) {
+    const st = staleness(ctx, s)
+    if (st) {
+      throw new Error(
+        t(`🔴 STALE — the graph changed after init, so "${declared.cmd}" is not the oracle this run committed to\n`, `🔴 STALE — init 뒤에 그래프가 바뀌었다. "${declared.cmd}" 는 이 실행이 약속한 오라클이 아니다\n`) +
+        t(`   state ${st.was.slice(7, 19)}…  ≠  graph ${st.now.slice(7, 19)}…\n   → revert the graph, or: run.mjs <graph> init --force`, `   상태 ${st.was.slice(7, 19)}…  ≠  그래프 ${st.now.slice(7, 19)}…\n   → 그래프를 되돌리거나: run.mjs <graph> init --force`))
+    }
+  }
+
+  const source = declared ? 'declared' : 'adhoc'
+  const cmd = declared ? declared.cmd : adhocCmd
+  const base = dirname(resolve(ctx.graphPath))   // hooks-gate.mjs 와 같은 기준
+  const cwd = declared?.cwd ? resolve(base, declared.cwd) : base
+  const timeout = declared?.timeout_ms ?? 600_000
+  const t0 = Date.now()
+  const r = spawnSync(cmd, { shell: true, cwd, timeout, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true })
+  const stdout = r.stdout ?? ''
+  const evidence = {
+    source, cmd, cwd: declared?.cwd ?? '.',
+    exit: r.status, ms: Date.now() - t0,
+    out_sha: sha256(stdout), out_tail: stdout.slice(-TAIL),
+  }
+  const fail = reason => {
+    saveState(ctx, s, 'measure_failed', { field, node: s.active ?? null, reason, ...evidence })
+    return new Error(
+      t(`🔴 measurement failed: ${field} — ${reason}\n`, `🔴 측정 실패: ${field} — ${reason}\n`) +
+      t(`   $ ${cmd}  (exit ${r.status ?? '-'}, ${evidence.ms}ms)\n`, `   $ ${cmd}  (exit ${r.status ?? '-'}, ${evidence.ms}ms)\n`) +
+      (stdout.trim() ? `   … ${stdout.trim().slice(-200).replace(/\n/g, '\n     ')}` : t('   (no stdout)', '   (stdout 없음)')) +
+      t('\n   (recorded in the ledger as measure_failed)', '\n   (원장에 measure_failed 로 남았다)'))
+  }
+  if (r.error || r.status === null) {
+    const why = r.error?.code === 'ETIMEDOUT' || r.signal ? t(`timed out / killed (${timeout}ms)`, `시간 초과·강제 종료 (${timeout}ms)`) : String(r.error?.message ?? r.signal)
+    throw fail(why)
+  }
+  const raw = extractValue(stdout, declared?.pattern)
+  if (raw === null) {
+    throw fail(declared?.pattern
+      ? t(`pattern /${declared.pattern}/ did not match stdout`, `pattern /${declared.pattern}/ 이 stdout 에 일치하지 않는다`)
+      : t('stdout is empty — the last non-empty line must be the number', 'stdout 이 비었다 — 비어 있지 않은 마지막 줄이 숫자여야 한다'))
+  }
+  let value
+  try { value = parseValue(spec, field, raw) } catch (e) { throw fail(e.message) }
+  return record(ctx, s, field, value, '', evidence)
 }
 
 /** 게이트 판정 — INV-1. 사람이 verdict 를 넣을 자리가 없다. */
@@ -281,8 +392,13 @@ export function evaluateGate (ctx, s, gateId) {
     threshold: gate.threshold,
     verdict: OPS[gate.op](m.value, gate.threshold) ? 'pass' : 'fail',
     ground_truth: gate.ground_truth ?? t('(unstated)', '(미기재)'),
+    // INV-6 — 선언(ground_truth)과 실제 출처(source)를 나란히 남긴다. 측정 기능 이전 값은 손으로 친 것이다.
+    source: m.source ?? 'reported',
   }
 }
+
+/** 게이트는 measured 라고 선언했는데 값은 손으로 쳤다 — 판정은 내리되 그 간극을 숨기지 않는다. */
+const provenanceGap = r => r.ground_truth === 'measured' && r.source === 'reported'
 
 export function cmdDone (ctx, s, nodeId) {
   if (s.halted) throw new Error(t(`halted: ${s.halted}`, `중단됨: ${s.halted}`))
@@ -362,7 +478,8 @@ export function cmdDone (ctx, s, nodeId) {
 
 function fmtGate (ctx, gid) {
   const g = ctx.gates.get(gid)
-  return `${gid}: ${g.field} ${g.op} ${g.threshold}  [${g.ground_truth ?? '?'}]`
+  const run = ctx.fields.get(g.field)?.measure ? t('  · measure --run', '  · 측정: --run') : ''
+  return `${gid}: ${g.field} ${g.op} ${g.threshold}  [${g.ground_truth ?? '?'}]${run}`
 }
 
 export function report (ctx, s) {
@@ -380,7 +497,7 @@ export function report (ctx, s) {
     const last = new Map()
     for (const r of s.gate_runs) last.set(r.gate, r)
     for (const [, r] of last) {
-      L.push(`  ${r.verdict === 'pass' ? '🟢' : '🔴'} ${r.gate}  ${r.field}=${r.value} ${r.op} ${r.threshold}  [${r.ground_truth}]`)
+      L.push(`  ${r.verdict === 'pass' ? '🟢' : '🔴'} ${r.gate}  ${r.field}=${r.value} ${r.op} ${r.threshold}  [${r.ground_truth} · ${r.source ?? 'reported'}]${provenanceGap({ source: 'reported', ...r }) ? ' ⚠' : ''}`)
     }
   }
 
@@ -415,7 +532,9 @@ const USAGE = t(`Avalon runner — EXECUTES graph.json
   run.mjs <graph.json> next                             what you can do now (resume point)
   run.mjs <graph.json> status                           full picture + gates not yet run
   run.mjs <graph.json> start <node>                     start a node (refused off the frontier)
-  run.mjs <graph.json> measure <field> <value> [note]   record a measurement (the tool judges)
+  run.mjs <graph.json> measure <field> <value> [note]   record a typed measurement (source: reported)
+  run.mjs <graph.json> measure <field> --run            run the field's declared state[].measure.cmd (source: declared)
+  run.mjs <graph.json> measure <field> --run "<cmd>"    run an ad-hoc command, undeclared fields only (source: adhoc)
   run.mjs <graph.json> done <node>                      complete — judge gates, open what follows
   run.mjs <graph.json> abort                            cancel the node in progress
   run.mjs <graph.json> lint                             check the OR trap (2+ gates on a node)
@@ -428,7 +547,9 @@ const USAGE = t(`Avalon runner — EXECUTES graph.json
   run.mjs <graph.json> next                             지금 할 수 있는 것 (재개 지점)
   run.mjs <graph.json> status                           전체 그림 + 안 돈 게이트
   run.mjs <graph.json> start <node>                     노드 착수 (프론티어 밖이면 거부)
-  run.mjs <graph.json> measure <field> <value> [메모]   측정값 기록 (판정은 도구가 한다)
+  run.mjs <graph.json> measure <field> <value> [메모]   손으로 친 측정값 기록 (source: reported)
+  run.mjs <graph.json> measure <field> --run            필드에 선언된 state[].measure.cmd 를 러너가 실행 (source: declared)
+  run.mjs <graph.json> measure <field> --run "<명령>"   즉석 명령 실행, 선언 없는 필드만 (source: adhoc)
   run.mjs <graph.json> done <node>                      완료 — 게이트 판정 후 다음을 연다
   run.mjs <graph.json> abort                            진행 중 노드 취소
   run.mjs <graph.json> lint                             OR 함정(한 노드 게이트 2개+) 검사
@@ -524,16 +645,25 @@ export async function main (argv) {
   if (cmd === 'start') { cmdStart(ctx, s, rest[0]); out({ ok: true, text: report(ctx, s) }); return 0 }
 
   if (cmd === 'measure') {
-    cmdMeasure(ctx, s, rest[0], rest[1], rest.slice(2).join(' '))
-    const m = s.measured[rest[0]]
-    out({ ok: true, measured: m, text: t(`recorded: ${rest[0]} = ${m.value}${m.note ? `  (${m.note})` : ''}`, `기록: ${rest[0]} = ${m.value}${m.note ? `  (${m.note})` : ''}`) })
+    const [field, ...more] = rest
+    if (more[0] === '--run') {
+      cmdMeasureRun(ctx, s, field, more.slice(1).join(' ').trim() || null)
+      const m = s.measured[field]
+      out({ ok: true, measured: m, text: t(`recorded: ${field} = ${m.value}  [${m.source} · exit ${m.exit}]  $ ${m.cmd}`, `기록: ${field} = ${m.value}  [${m.source} · exit ${m.exit}]  $ ${m.cmd}`) })
+      return 0
+    }
+    cmdMeasure(ctx, s, field, more[0], more.slice(1).join(' '))
+    const m = s.measured[field]
+    out({ ok: true, measured: m, text: t(`recorded: ${field} = ${m.value}  [reported]${m.note ? `  (${m.note})` : ''}`, `기록: ${field} = ${m.value}  [reported]${m.note ? `  (${m.note})` : ''}`) })
     return 0
   }
 
   if (cmd === 'done') {
     const r = cmdDone(ctx, s, rest[0])
     const lines = r.results.map(x =>
-      `  ${x.verdict === 'pass' ? '🟢' : '🔴'} ${x.gate}: ${x.field}=${x.value} ${x.op} ${x.threshold} → ${x.verdict}`)
+      `  ${x.verdict === 'pass' ? '🟢' : '🔴'} ${x.gate}: ${x.field}=${x.value} ${x.op} ${x.threshold} → ${x.verdict}  [${x.source}]` +
+      (provenanceGap(x) ? t('\n     ⚠ the gate declares ground_truth: measured, but this value was typed (reported) — declare state[].measure',
+        '\n     ⚠ 게이트는 ground_truth: measured 라 선언했는데 이 값은 손으로 쳤다(reported) — state[].measure 를 선언하라') : ''))
     out({ ok: !r.halted, results: r.results, opened: r.opened, halted: r.halted,
       text: [t(`done: ${rest[0]}`, `완료: ${rest[0]}`), ...lines, '', report(ctx, s)].join('\n') })
     return r.halted ? 1 : 0

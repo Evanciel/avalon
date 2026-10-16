@@ -38,6 +38,10 @@ Replace the skeleton's `TODO:` items with the real design. What the nodes are an
 - **Gates are numbers.** The schema refuses descriptive gates outright. Write `threshold_source`
   for every threshold — an unsourced threshold is decoration.
 - **Match units.** `type: ratio` (0–1) with threshold 90 can never pass. This bug actually happened.
+- **Give each gated field its measuring command** — `"measure": { "cmd": "<command>", "pattern": "<regex with one group>" }`
+  on the `state[]` entry. The runner then runs it itself (`measure <field> --run`) and refuses a typed
+  number. Without it, the value is the agent's word (`source: reported`) — exactly the self-grading
+  Avalon exists to remove. Without `pattern`, the last non-empty stdout line must be the number.
 - Put `policy.requires_approval: true` on irreversible nodes. **The compiled code actually stops there.**
 - Declare hook-enforced gates as `{ "gate": "<id>", "check": "<command>" }` in `host.enforced_by_hook`.
   The check must exit non-zero when the gate is unmet — **a declaration without a machine is caught as hook_loss.**
@@ -83,7 +87,9 @@ The default is the empty set — a regression test pins this so the gate can't h
 node tools/run.mjs graph.json init      # create state (after editing the graph: init --force)
 node tools/run.mjs graph.json next      # what can be done right now
 node tools/run.mjs graph.json start <node>
-node tools/run.mjs graph.json measure <field> <value> [note]
+node tools/run.mjs graph.json measure <field> --run          # runs state[].measure.cmd (source: declared)
+node tools/run.mjs graph.json measure <field> --run "<cmd>"  # undeclared fields only (source: adhoc)
+node tools/run.mjs graph.json measure <field> <value> [note]  # typed (source: reported) — refused if a cmd is declared
 node tools/run.mjs graph.json done <node>   # only the tool delivers gate verdicts
 node tools/run.mjs graph.json verify    # ledger hash-chain check (tamper/truncation)
 ```
@@ -93,6 +99,10 @@ is refused if this visit didn't measure; every measurement lands append-only in 
 Ledger lines are **hash-chained** (`h`/`prev` + `ledger_head` in state) — editing, deleting, or
 reordering past lines makes every command refuse. If the graph hash changes, state is marked
 STALE — nothing continues silently.
+Every measurement and gate result carries its `source` (`declared` · `adhoc` · `reported`). A declared
+command is covered by the graph hash, so swapping it after `init` is STALE and `--run` refuses. A failed
+measurement (no number, timeout) is ledgered as `measure_failed` — quiet retries until green are visible.
+**Report the sources.** A gate passed on `reported` values is the agent's word, not a measurement.
 
 ## Completion — abandonment is not success
 

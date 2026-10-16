@@ -815,6 +815,30 @@ t('probe: 비어 있지 않은 명령 문자열이면 위반이 아니다', () =
   ok(!validate(g).schemaViolations.some((v) => v.includes('probe')), '정상 probe 를 위반으로 잡았다')
 })
 
+console.log('\n── 측정 오라클 state[].measure — 스키마 ──')
+
+const measureViol = (measure) => {
+  const g = clone()
+  g.state[0].measure = measure
+  return validate(g).schemaViolations.filter((v) => v.includes('measure'))
+}
+
+t('measure: 못 도는 선언은 스키마 위반이다 (빈 cmd·컴파일 불가 정규식·캡처 없는 pattern·음수 timeout)', () => {
+  for (const [why, m] of [
+    ['문자열 하나', 'npm test'],
+    ['빈 cmd', { cmd: '  ' }],
+    ['컴파일 불가 정규식', { cmd: 'x', pattern: 'failed: (\\d+' }],
+    ['캡처 그룹 없음', { cmd: 'x', pattern: 'failed: \\d+' }],
+    ['timeout 0', { cmd: 'x', timeout_ms: 0 }],
+    ['빈 cwd', { cmd: 'x', cwd: '' }],
+  ]) ok(measureViol(m).length > 0, `${why} 를 통과시켰다`)
+})
+
+t('measure: 정상 선언은 위반이 아니다', () => {
+  eq(measureViol({ cmd: 'npm test', pattern: 'failed: (\\d+)', timeout_ms: 60000, cwd: '..' }).length, 0, '정상 선언의 위반 수')
+  eq(measureViol({ cmd: 'node tools/count.mjs' }).length, 0, '최소 선언의 위반 수')
+})
+
 console.log('\n── scaffold.mjs — 지문 변별력 ──')
 
 // 지문의 변별력은 지금까지 <미검증> 한계였다: 같은 저장소 → 같은 지문(결정론),
