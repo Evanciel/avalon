@@ -272,6 +272,7 @@ function measureViolations(s) {
     else if (groups < 1) out.push(t(`${at}.pattern needs a capture group — the value is group 1 of the last match`, `${at}.pattern 에 캡처 그룹이 필요하다 — 값은 마지막 일치의 1번 그룹이다`))
   }
   if (m.timeout_ms !== undefined && !(Number.isInteger(m.timeout_ms) && m.timeout_ms > 0)) out.push(t(`${at}.timeout_ms must be a positive integer`, `${at}.timeout_ms 는 양의 정수여야 한다`))
+  if (m.repeat !== undefined && !(Number.isInteger(m.repeat) && m.repeat >= 1)) out.push(t(`${at}.repeat must be an integer >= 1`, `${at}.repeat 는 1 이상의 정수여야 한다`))
   if (m.cwd !== undefined && (typeof m.cwd !== 'string' || !m.cwd.trim())) out.push(t(`${at}.cwd must be a non-empty path (relative to graph.json)`, `${at}.cwd 는 비어 있지 않은 경로여야 한다 (graph.json 기준)`))
   return out
 }
@@ -323,6 +324,10 @@ export function validate(graph) {
       .filter((s) => s.unit !== undefined && !VALID_UNITS.has(s.unit))
       .map((s) => t(`state ${s.field}: unit '${s.unit}' invalid (count|percent|ratio|ms|usd|none)`, `state ${s.field}: unit '${s.unit}' 무효 (count|percent|ratio|ms|usd|none)`)),
     ...(graph.state ?? []).flatMap((s) => measureViolations(s)),
+    // on_fail.premise_after — run.mjs INV-7. 0 은 끔, 양의 정수는 그 횟수만큼 실패하면 전제 시험을 요구한다.
+    ...(graph.gates ?? [])
+      .filter((x) => x.on_fail?.premise_after !== undefined && !(Number.isInteger(x.on_fail.premise_after) && x.on_fail.premise_after >= 0))
+      .map((x) => t(`gate ${x.id}: on_fail.premise_after must be an integer >= 0 (0 = off)`, `게이트 ${x.id}: on_fail.premise_after 는 0 이상의 정수여야 한다 (0 = 끔)`)),
     ...hookEntries
       .filter((e) => !e.id)
       .map(() => t(`host.enforced_by_hook: entry without gate id — must be of the form { "gate": "<id>", "check": "<command>" }`, `host.enforced_by_hook: gate id 없는 항목 — { "gate": "<id>", "check": "<명령>" } 형태여야 한다`)),

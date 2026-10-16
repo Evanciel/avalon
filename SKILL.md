@@ -42,6 +42,7 @@ Replace the skeleton's `TODO:` items with the real design. What the nodes are an
   on the `state[]` entry. The runner then runs it itself (`measure <field> --run`) and refuses a typed
   number. Without it, the value is the agent's word (`source: reported`) — exactly the self-grading
   Avalon exists to remove. Without `pattern`, the last non-empty stdout line must be the number.
+  Add `"repeat": 3` when the number could wobble (timing, caching) — runs that disagree are refused.
 - Put `policy.requires_approval: true` on irreversible nodes. **The compiled code actually stops there.**
 - Declare hook-enforced gates as `{ "gate": "<id>", "check": "<command>" }` in `host.enforced_by_hook`.
   The check must exit non-zero when the gate is unmet — **a declaration without a machine is caught as hook_loss.**
@@ -90,6 +91,7 @@ node tools/run.mjs graph.json start <node>
 node tools/run.mjs graph.json measure <field> --run          # runs state[].measure.cmd (source: declared)
 node tools/run.mjs graph.json measure <field> --run "<cmd>"  # undeclared fields only (source: adhoc)
 node tools/run.mjs graph.json measure <field> <value> [note]  # typed (source: reported) — refused if a cmd is declared
+node tools/run.mjs graph.json premise <gate> "<premise>" --test "<cmd>"  # after repeated fails (see below)
 node tools/run.mjs graph.json done <node>   # only the tool delivers gate verdicts
 node tools/run.mjs graph.json verify    # ledger hash-chain check (tamper/truncation)
 ```
@@ -103,6 +105,12 @@ Every measurement and gate result carries its `source` (`declared` · `adhoc` ·
 command is covered by the graph hash, so swapping it after `init` is STALE and `--run` refuses. A failed
 measurement (no number, timeout) is ledgered as `measure_failed` — quiet retries until green are visible.
 **Report the sources.** A gate passed on `reported` values is the agent's word, not a measurement.
+
+**Attack the premise.** When the same gate fails `on_fail.premise_after` times (default 2), `start` is refused.
+Write the one premise every fix so far assumed, and give a command that tests it directly (exit 0 = holds):
+`premise G1 "the cache is cleared between runs" --test "<cmd>"`. Holds or refuted, the test is the evidence and
+unblocks the run; re-running the gate's own measurement is refused. If it is refuted, drop every fix built on it.
+Branch gates (`max_retry: 0`) are exempt; `premise_after: 0` turns it off.
 
 ## Completion — abandonment is not success
 

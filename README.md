@@ -5,7 +5,7 @@
 **An AI agent's "done" is an opinion. Avalon turns it into a measurement.**<br/>
 Pin the pass conditions as numbers before the work starts. Let tools, not the AI, do the judging.
 
-[![npm](https://img.shields.io/npm/v/avalon-skill?color=cb3837&logo=npm)](https://www.npmjs.com/package/avalon-skill) [![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-175%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![npm](https://img.shields.io/npm/v/avalon-skill?color=cb3837&logo=npm)](https://www.npmjs.com/package/avalon-skill) [![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-188%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 **English** · [한국어](README.ko.md) · [日本語](README.ja.md) · [简体中文](README.zh.md)
 
@@ -253,13 +253,14 @@ node tools/run.mjs graph.json status          # whole picture, including gates t
 node tools/run.mjs graph.json start <node>    # refused if the node isn't in the frontier
 node tools/run.mjs graph.json measure <field> <value> [note]
 node tools/run.mjs graph.json measure <field> --run   # runs state[].measure.cmd — the runner measures, not you
+node tools/run.mjs graph.json premise <gate> "<premise>" --test "<cmd>"   # after repeated fails: test the premise
 node tools/run.mjs graph.json done <node>     # the tool decides pass/fail, not you
 node tools/run.mjs graph.json verify          # ledger hash-chain check (tamper / truncation)
 node tools/run.mjs graph.json abort           # cancel the active node
 node tools/run.mjs graph.json lint            # OR-trap check (2+ gates on one node)
 ```
 
-Every command takes `--json` for machine-readable output. The runner is mostly a list of things it won't let happen — its invariants (INV-1 to INV-6 in [run.mjs](tools/run.mjs)):
+Every command takes `--json` for machine-readable output. The runner is mostly a list of things it won't let happen — its invariants (INV-1 to INV-7 in [run.mjs](tools/run.mjs)):
 
 | You try | The runner says |
 |---|---|
@@ -269,10 +270,11 @@ Every command takes `--json` for machine-readable output. The runner is mostly a
 | Edit the graph after `init` and keep going | Flagged **STALE** — the state remembers which graph hash it was built from |
 | Fail a gate more times than `max_retry` | **Halted** — the run stops and hands the decision to a human |
 | Type a number for a field whose `state[].measure` declares a command | Refused — `measure <field> --run` makes the runner execute the declared command itself; swapping in another command, or editing it after `init` (STALE), is refused too |
+| `start` again after the same gate failed twice | Refused until you write down the premise every fix relied on and the runner runs a command that tests it directly (`premise`). Holds or refuted, the test is evidence; re-running the gate's own measurement is refused. `on_fail.premise_after` tunes it (0 = off); branch gates (`max_retry: 0`) are exempt |
 
 Every accepted measurement is appended to the ledger. Nothing in it is ever rewritten — even `init --force` discards the state but keeps the ledger. And the ledger defends itself: see [The evidence defends itself](#the-evidence-defends-itself).
 
-Every measurement also records **where the number came from** — `declared` (the runner ran the command fixed in the graph before the work began), `adhoc` (the runner ran a command given on the spot; command, exit code and output hash are kept), or `reported` (typed in). Gate results carry that source, and a gate that declares `ground_truth: measured` but was fed a typed value is flagged ⚠. A declaration looks like `{ "field": "tests_failed", "type": "int", "measure": { "cmd": "npm test", "pattern": "failed: (\d+)" } }` — without `pattern`, the last non-empty stdout line must be the number. A non-zero exit is fine (test runners exit 1 when they report failures); no number is a failed measurement, and that failure is ledgered too.
+Every measurement also records **where the number came from** — `declared` (the runner ran the command fixed in the graph before the work began), `adhoc` (the runner ran a command given on the spot; command, exit code and output hash are kept), or `reported` (typed in). Gate results carry that source, and a gate that declares `ground_truth: measured` but was fed a typed value is flagged ⚠. A declaration looks like `{ "field": "tests_failed", "type": "int", "measure": { "cmd": "npm test", "pattern": "failed: (\d+)" } }` — without `pattern`, the last non-empty stdout line must be the number. A non-zero exit is fine (test runners exit 1 when they report failures); no number is a failed measurement, and that failure is ledgered too. `measure.repeat: N` runs the command N times and accepts the value only if every run agrees — a number that changes between identical runs is an unstable oracle, not a measurement.
 
 Tool messages are English by default; a Korean system locale (or `AVALON_LANG=ko`) switches them to Korean. Build artifacts are always English — their bytes are hashed, so they must not depend on the environment.
 
@@ -491,10 +493,10 @@ The graph's `guarantees` block is the honest-limits list in machine-adjacent for
 
 ## How it's tested
 
-175 tests in three suites, all run by `npm test`:
+188 tests in three suites, all run by `npm test`:
 
-- **[test.mjs](tools/test.mjs) (95)** — schema and compiler behavior, including **execution semantics**: compiled workflow output is actually executed against stubbed hosts, so claims like "completed is false while abandoned is non-empty" are demonstrated, not asserted. New here: **fingerprint discrimination** — the same repo scaffolded twice must produce byte-identical fingerprints and two different repos must not, measured with real scaffold runs; the fingerprint's discriminative power was an *unverified* claim until these tests. A deploy-sync gate byte-compares the nine runtime files against the installed skill copy, so the repo and the deployed skill can't drift apart silently.
-- **[run.selftest.mjs](tools/run.selftest.mjs) (56)** — the runner's refusal walls, tested by the only method that proves a guard exists: *remove the guard, and the suite must turn red*. Each test constructs the forbidden situation (out-of-frontier start, unmeasured done, edited-graph continue) and passes only if the runner refuses. The ledger-chain tests attack real ledgers — edit a past measurement, truncate the tail, append past the chain — and pass only when every command refuses.
+- **[test.mjs](tools/test.mjs) (96)** — schema and compiler behavior, including **execution semantics**: compiled workflow output is actually executed against stubbed hosts, so claims like "completed is false while abandoned is non-empty" are demonstrated, not asserted. New here: **fingerprint discrimination** — the same repo scaffolded twice must produce byte-identical fingerprints and two different repos must not, measured with real scaffold runs; the fingerprint's discriminative power was an *unverified* claim until these tests. A deploy-sync gate byte-compares the nine runtime files against the installed skill copy, so the repo and the deployed skill can't drift apart silently.
+- **[run.selftest.mjs](tools/run.selftest.mjs) (68)** — the runner's refusal walls, tested by the only method that proves a guard exists: *remove the guard, and the suite must turn red*. Each test constructs the forbidden situation (out-of-frontier start, unmeasured done, edited-graph continue) and passes only if the runner refuses. The ledger-chain tests attack real ledgers — edit a past measurement, truncate the tail, append past the chain — and pass only when every command refuses.
 - **[install.selftest.mjs](tools/install.selftest.mjs) (24)** — the installer's boundaries, same method: no write without `--yes`, global settings refused, stale spec refused, other people's hooks preserved, idempotent reinstall, and the gate blocking (exit 2) on failure and on STALE. Three are TOCTOU attack scenarios: they modify `build/hooks.json` *after* approval — swapping a check for a malicious command, even regenerating graph and spec consistently — and pass only if the gate blocks **without executing anything** (a marker file proves the planted command never ran). The rest pin the probe wall (an oracle that cannot fail is refused as decoration), `--status` reading without writing, and English being the actual default language.
 
 CI runs all three suites on ubuntu and windows. Line endings are pinned to LF via [.gitattributes](.gitattributes) because G0b is a byte-exact oracle — a CRLF checkout would technically be a different document.
@@ -515,8 +517,8 @@ tools/
   install-hooks.mjs      approval-gated hook installer (project settings only)
   hooks-gate.mjs         Stop-hook enforcer — red gate blocks ending the turn
   fixtures/              committed broken inputs — what the probes aim at
-  test.mjs               schema / compiler / execution-semantics / fingerprint tests (95)
-  run.selftest.mjs       runner self-test — "does removing a guard turn it red?" (56)
+  test.mjs               schema / compiler / execution-semantics / fingerprint tests (96)
+  run.selftest.mjs       runner self-test — "does removing a guard turn it red?" (68)
   install.selftest.mjs   installer/gate self-test — approval, probe, tamper walls (24)
 docs/graph/              design history, IR spec, the scar records above
 images/                  the diagrams in this README

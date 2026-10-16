@@ -13,6 +13,9 @@
  * INV-5  그래프 해시가 바뀌면 상태가 stale 임을 알린다 (조용히 이어가지 않는다).
  * INV-6  state[].measure 로 측정 명령을 선언한 필드는 <러너가 그 명령을 돌려서만> 잰다.
  *        손으로 친 숫자도, 그 자리에서 바꿔 낀 명령도 거부한다. 출처는 측정마다 남는다.
+ * INV-7  같은 게이트가 on_fail.premise_after(기본 2)번 실패하면, 수정들이 기대는 <전제>를 적고
+ *        그 전제를 <직접> 시험하는 명령을 러너가 돌리기 전까지 다음 start 를 거부한다.
+ *        (pstack attack-the-premise — 같은 전제 위의 세 번째 수정은 대개 첫 두 번처럼 실패한다)
  *
  * 의존성 없음. 네트워크 없음. node >= 18.
  */
@@ -151,6 +154,7 @@ export function freshState (ctx, now = new Date().toISOString()) {
     gate_runs: [],   // { gate, field, value, op, threshold, verdict, ground_truth, source, at, node }
     gate_fails: {},  // gateId -> 누적 fail (on_fail.max_retry 와 대조)
     node_runs: {},   // nodeId -> 착수 횟수 (retry.max 와 대조)
+    premise: {},     // gateId -> { since: 마지막 전제 시험 때의 gate_fails, tests }
     halted: null,
   }
 }
@@ -222,9 +226,76 @@ function pushReady (ctx, s, nodeId) {
   return true
 }
 
+// ── 전제 공격 (INV-7) ──────────────────────────────────────────────────────
+
+/** 이 게이트는 몇 번 실패하면 전제 시험을 요구하나. 0 이면 요구하지 않는다. */
+function premiseAfter (gate) {
+  // max_retry 0 은 <분기> 다 — 미달이 정상 경로라 고치기 시도가 아니다. 전제를 물을 일이 없다.
+  if ((gate.on_fail?.max_retry ?? 0) === 0) return 0
+  return gate.on_fail?.premise_after ?? 2
+}
+
+/** 지금 전제 시험이 밀린 게이트들. */
+export function premiseDue (ctx, s) {
+  const due = []
+  for (const [id, gate] of ctx.gates) {
+    const after = premiseAfter(gate)
+    if (!after) continue
+    const fails = s.gate_fails?.[id] ?? 0
+    const since = s.premise?.[id]?.since ?? 0
+    if (fails - since >= after) due.push({ gate: id, fails, since, after })
+  }
+  return due
+}
+
+const premiseHint = gid => `run.mjs <graph> premise ${gid} "<${t('the premise every fix so far relied on', '지금까지의 수정이 기댄 전제')}>" --test "<${t('command that tests it directly', '그 전제를 직접 시험하는 명령')}>"`
+
+/**
+ * INV-7 — 전제를 적고, 러너가 시험 명령을 돌린다. exit 0 = 전제가 섰다 / exit≠0 = 무너졌다.
+ * 어느 쪽이든 시험은 끝난 것이라 막힌 start 가 풀린다 — 요구하는 것은 <시험했다는 증거>지 특정 결론이 아니다.
+ * 게이트의 측정 명령을 그대로 다시 돌리는 것은 전제 시험이 아니다 (같은 질문을 또 묻는 것) — 거부한다.
+ */
+export function cmdPremise (ctx, s, gateId, premise, testCmd) {
+  const gate = ctx.gates.get(gateId)
+  if (!gate) throw new Error(t(`no such gate: ${gateId}`, `없는 게이트: ${gateId}`))
+  if (!premise || !String(premise).trim()) {
+    throw new Error(t('🔴 write the premise down — one sentence the failed fixes all assumed\n   → ',
+      '🔴 전제를 적어라 — 실패한 수정들이 모두 가정한 한 문장\n   → ') + premiseHint(gateId))
+  }
+  if (!testCmd || !String(testCmd).trim()) {
+    throw new Error(t('🔴 a premise without a test is another guess — give --test "<command>" (exit 0 = holds)\n   → ',
+      '🔴 시험 없는 전제는 또 하나의 추측이다 — --test "<명령>" 을 줘라 (exit 0 = 전제가 섰다)\n   → ') + premiseHint(gateId))
+  }
+  const measureCmd = ctx.fields.get(gate.field)?.measure?.cmd
+  if (measureCmd && measureCmd.trim() === String(testCmd).trim()) {
+    throw new Error(t(`🔴 that is the gate's own measurement (${gate.field}) — re-measuring asks the same question again; test the premise underneath it`, `🔴 그건 게이트 자신의 측정(${gate.field})이다 — 다시 재는 건 같은 질문을 또 묻는 것이다. 그 밑의 전제를 시험하라`))
+  }
+  s.premise ??= {}
+  const fails = s.gate_fails?.[gateId] ?? 0
+  const x = runShell(ctx, testCmd, null, 600_000)
+  const evidence = { gate: gateId, premise: String(premise).trim(), cmd: testCmd, exit: x.exit, ms: x.ms, out_sha: x.out_sha, out_tail: x.out_tail, fails }
+  if (x.error) {
+    saveState(ctx, s, 'premise_failed', { ...evidence, reason: x.error })
+    throw new Error(t(`🔴 premise test did not finish: ${x.error} — the premise is still untested`, `🔴 전제 시험이 끝나지 않았다: ${x.error} — 전제는 여전히 시험되지 않았다`))
+  }
+  const verdict = x.exit === 0 ? 'holds' : 'refuted'
+  s.premise[gateId] = { since: fails, tests: (s.premise[gateId]?.tests ?? 0) + 1 }
+  saveState(ctx, s, 'premise', { ...evidence, verdict })
+  return { verdict, exit: x.exit, fails }
+}
+
 export function cmdStart (ctx, s, nodeId) {
   if (s.halted) throw new Error(t(`halted: ${s.halted}`, `중단됨: ${s.halted}`))
   if (s.active) throw new Error(t(`a node is already in progress: ${s.active}  → done or abort it first`, `이미 진행 중인 노드가 있다: ${s.active}  → 먼저 done 하거나 abort`))
+  const due = premiseDue(ctx, s)
+  if (due.length) {
+    throw new Error(
+      t('🔴 attack the premise first — the same gate failed again and again:\n', '🔴 전제부터 공격하라 — 같은 게이트가 거듭 실패했다:\n') +
+      due.map(d => t(`   ${d.gate}: ${d.fails - d.since} fails since the last premise test (premise_after ${d.after})`, `   ${d.gate}: 마지막 전제 시험 뒤 ${d.fails - d.since}회 실패 (premise_after ${d.after})`)).join('\n') +
+      t('\n   ★A third fix on the same premise usually fails like the first two. Write the premise down and test it directly.\n   → ',
+        '\n   ★같은 전제 위의 세 번째 수정은 대개 앞의 두 번처럼 실패한다. 전제를 적고 직접 시험하라.\n   → ') +
+      premiseHint(due[0].gate))
+  }
   if (!s.ready.includes(nodeId)) {
     throw new Error(
       t(`🔴 not on the frontier: ${nodeId}\n`, `🔴 프론티어에 없는 노드다: ${nodeId}\n`) +
@@ -344,38 +415,53 @@ export function cmdMeasureRun (ctx, s, field, adhocCmd = null) {
 
   const source = declared ? 'declared' : 'adhoc'
   const cmd = declared ? declared.cmd : adhocCmd
-  const base = dirname(resolve(ctx.graphPath))   // hooks-gate.mjs 와 같은 기준
-  const cwd = declared?.cwd ? resolve(base, declared.cwd) : base
   const timeout = declared?.timeout_ms ?? 600_000
+  // explain-the-number — 한 번 잰 숫자는 우연일 수 있다. repeat 번 돌려 값이 전부 같아야 측정이다.
+  //   흔들리는 오라클(타이밍·순서·캐시에 따라 값이 바뀌는 명령)은 판정 근거가 될 수 없다.
+  const repeat = declared?.repeat ?? 1
+  const values = []
+  let x = null
+  for (let i = 0; i < repeat; i++) {
+    x = runShell(ctx, cmd, declared?.cwd, timeout)
+    const evidence = { source, cmd, cwd: declared?.cwd ?? '.', exit: x.exit, ms: x.ms, out_sha: x.out_sha, out_tail: x.out_tail, ...(repeat > 1 ? { run: i + 1, of: repeat, values } : {}) }
+    const fail = reason => {
+      saveState(ctx, s, 'measure_failed', { field, node: s.active ?? null, reason, ...evidence })
+      return new Error(
+        t(`🔴 measurement failed: ${field} — ${reason}\n`, `🔴 측정 실패: ${field} — ${reason}\n`) +
+        `   $ ${cmd}  (exit ${x.exit ?? '-'}, ${x.ms}ms${repeat > 1 ? t(`, run ${i + 1}/${repeat}`, `, ${i + 1}/${repeat}회차`) : ''})\n` +
+        (x.stdout.trim() ? `   … ${x.stdout.trim().slice(-200).replace(/\n/g, '\n     ')}` : t('   (no stdout)', '   (stdout 없음)')) +
+        t('\n   (recorded in the ledger as measure_failed)', '\n   (원장에 measure_failed 로 남았다)'))
+    }
+    if (x.error) throw fail(x.error)
+    const raw = extractValue(x.stdout, declared?.pattern)
+    if (raw === null) {
+      throw fail(declared?.pattern
+        ? t(`pattern /${declared.pattern}/ did not match stdout`, `pattern /${declared.pattern}/ 이 stdout 에 일치하지 않는다`)
+        : t('stdout is empty — the last non-empty line must be the number', 'stdout 이 비었다 — 비어 있지 않은 마지막 줄이 숫자여야 한다'))
+    }
+    let value
+    try { value = parseValue(spec, field, raw) } catch (e) { throw fail(e.message) }
+    values.push(value)
+    if (values.some(v => v !== values[0])) {
+      throw fail(t(`unstable oracle — the same command gave different values: [${values.join(', ')}]`, `흔들리는 오라클 — 같은 명령이 다른 값을 냈다: [${values.join(', ')}]`))
+    }
+  }
+  return record(ctx, s, field, values[0], '', {
+    source, cmd, cwd: declared?.cwd ?? '.', exit: x.exit, ms: x.ms, out_sha: x.out_sha, out_tail: x.out_tail,
+    ...(repeat > 1 ? { runs: values } : {}),
+  })
+}
+
+/** 셸 명령 1회 실행 — 측정과 전제 시험이 같은 기준(graph.json 폴더, hooks-gate.mjs 와 동일)으로 돈다. */
+function runShell (ctx, cmd, relCwd, timeout) {
+  const base = dirname(resolve(ctx.graphPath))
   const t0 = Date.now()
-  const r = spawnSync(cmd, { shell: true, cwd, timeout, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true })
+  const r = spawnSync(cmd, { shell: true, cwd: relCwd ? resolve(base, relCwd) : base, timeout, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true })
   const stdout = r.stdout ?? ''
-  const evidence = {
-    source, cmd, cwd: declared?.cwd ?? '.',
-    exit: r.status, ms: Date.now() - t0,
-    out_sha: sha256(stdout), out_tail: stdout.slice(-TAIL),
-  }
-  const fail = reason => {
-    saveState(ctx, s, 'measure_failed', { field, node: s.active ?? null, reason, ...evidence })
-    return new Error(
-      t(`🔴 measurement failed: ${field} — ${reason}\n`, `🔴 측정 실패: ${field} — ${reason}\n`) +
-      t(`   $ ${cmd}  (exit ${r.status ?? '-'}, ${evidence.ms}ms)\n`, `   $ ${cmd}  (exit ${r.status ?? '-'}, ${evidence.ms}ms)\n`) +
-      (stdout.trim() ? `   … ${stdout.trim().slice(-200).replace(/\n/g, '\n     ')}` : t('   (no stdout)', '   (stdout 없음)')) +
-      t('\n   (recorded in the ledger as measure_failed)', '\n   (원장에 measure_failed 로 남았다)'))
-  }
-  if (r.error || r.status === null) {
-    const why = r.error?.code === 'ETIMEDOUT' || r.signal ? t(`timed out / killed (${timeout}ms)`, `시간 초과·강제 종료 (${timeout}ms)`) : String(r.error?.message ?? r.signal)
-    throw fail(why)
-  }
-  const raw = extractValue(stdout, declared?.pattern)
-  if (raw === null) {
-    throw fail(declared?.pattern
-      ? t(`pattern /${declared.pattern}/ did not match stdout`, `pattern /${declared.pattern}/ 이 stdout 에 일치하지 않는다`)
-      : t('stdout is empty — the last non-empty line must be the number', 'stdout 이 비었다 — 비어 있지 않은 마지막 줄이 숫자여야 한다'))
-  }
-  let value
-  try { value = parseValue(spec, field, raw) } catch (e) { throw fail(e.message) }
-  return record(ctx, s, field, value, '', evidence)
+  const error = r.error || r.status === null
+    ? (r.error?.code === 'ETIMEDOUT' || r.signal ? t(`timed out / killed (${timeout}ms)`, `시간 초과·강제 종료 (${timeout}ms)`) : String(r.error?.message ?? r.signal))
+    : null
+  return { stdout, exit: r.status, ms: Date.now() - t0, out_sha: sha256(stdout), out_tail: stdout.slice(-TAIL), error }
 }
 
 /** 게이트 판정 — INV-1. 사람이 verdict 를 넣을 자리가 없다. */
@@ -509,7 +595,11 @@ export function report (ctx, s) {
   }
 
   L.push(t('── next ──', '── 다음 ──'))
-  if (s.halted) L.push(t('  (halted — a human must decide)', '  (중단됨 — 사람이 판단해야 한다)'))
+  const due = s.halted ? [] : premiseDue(ctx, s)
+  if (due.length) {
+    for (const d of due) L.push(t(`  ⛔ ${d.gate} failed ${d.fails - d.since}× — test the premise before the next start`, `  ⛔ ${d.gate} ${d.fails - d.since}회 실패 — 다음 start 전에 전제를 시험하라`))
+    L.push(`     ${premiseHint(due[0].gate)}`)
+  } else if (s.halted) L.push(t('  (halted — a human must decide)', '  (중단됨 — 사람이 판단해야 한다)'))
   else if (s.active) L.push(`  run.mjs <graph> done ${s.active}`)
   else if (!s.ready.length) L.push(t('  ✅ no nodes left — terminal', '  ✅ 남은 노드 없음 — 종단'))
   else {
@@ -536,6 +626,7 @@ const USAGE = t(`Avalon runner — EXECUTES graph.json
   run.mjs <graph.json> measure <field> --run            run the field's declared state[].measure.cmd (source: declared)
   run.mjs <graph.json> measure <field> --run "<cmd>"    run an ad-hoc command, undeclared fields only (source: adhoc)
   run.mjs <graph.json> done <node>                      complete — judge gates, open what follows
+  run.mjs <graph.json> premise <gate> "<premise>" --test "<cmd>"   after repeated gate fails: test the premise (exit 0 = holds)
   run.mjs <graph.json> abort                            cancel the node in progress
   run.mjs <graph.json> lint                             check the OR trap (2+ gates on a node)
   run.mjs <graph.json> verify                           verify the ledger hash chain (tamper/truncation)
@@ -551,6 +642,7 @@ const USAGE = t(`Avalon runner — EXECUTES graph.json
   run.mjs <graph.json> measure <field> --run            필드에 선언된 state[].measure.cmd 를 러너가 실행 (source: declared)
   run.mjs <graph.json> measure <field> --run "<명령>"   즉석 명령 실행, 선언 없는 필드만 (source: adhoc)
   run.mjs <graph.json> done <node>                      완료 — 게이트 판정 후 다음을 연다
+  run.mjs <graph.json> premise <gate> "<전제>" --test "<명령>"   게이트 거듭 실패 뒤: 전제를 시험 (exit 0 = 섰다)
   run.mjs <graph.json> abort                            진행 중 노드 취소
   run.mjs <graph.json> lint                             OR 함정(한 노드 게이트 2개+) 검사
   run.mjs <graph.json> verify                           원장 해시 체인 검증 (변조·절단 탐지)
@@ -655,6 +747,19 @@ export async function main (argv) {
     cmdMeasure(ctx, s, field, more[0], more.slice(1).join(' '))
     const m = s.measured[field]
     out({ ok: true, measured: m, text: t(`recorded: ${field} = ${m.value}  [reported]${m.note ? `  (${m.note})` : ''}`, `기록: ${field} = ${m.value}  [reported]${m.note ? `  (${m.note})` : ''}`) })
+    return 0
+  }
+
+  if (cmd === 'premise') {
+    const at = rest.indexOf('--test')
+    const premise = (at < 0 ? rest.slice(1) : rest.slice(1, at)).join(' ')
+    const testCmd = at < 0 ? '' : rest.slice(at + 1).join(' ')
+    const r = cmdPremise(ctx, s, rest[0], premise, testCmd)
+    out({ ok: true, ...r, text:
+      (r.verdict === 'holds'
+        ? t(`🟢 premise HOLDS (exit 0) — the cause of ${rest[0]} failing is somewhere else; look there next`, `🟢 전제가 섰다 (exit 0) — ${rest[0]} 실패의 원인은 다른 곳에 있다. 다음엔 거기를 보라`)
+        : t(`🔴 premise REFUTED (exit ${r.exit}) — drop every fix that relied on it`, `🔴 전제가 무너졌다 (exit ${r.exit}) — 이 전제에 기댄 수정은 전부 버려라`)) +
+      `\n\n${report(ctx, s)}` })
     return 0
   }
 

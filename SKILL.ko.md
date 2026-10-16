@@ -35,7 +35,7 @@ node tools/scaffold.mjs <대상경로> "<과제 한 줄>" graph.json
 - **게이트가 보는 필드마다 측정 명령을 단다** — `state[]` 항목에 `"measure": { "cmd": "<명령>", "pattern": "<그룹 1개 정규식>" }`.
   그러면 러너가 직접 돌리고(`measure <필드> --run`) 손으로 친 숫자는 거부한다. 이게 없으면 값은 에이전트의
   말(`source: reported`)이다 — 아발론이 없애려는 자기채점 그 자체다. `pattern`이 없으면 stdout의 비어 있지 않은
-  마지막 줄이 숫자여야 한다.
+  마지막 줄이 숫자여야 한다. 값이 흔들릴 수 있으면(타이밍·캐시) `"repeat": 3` — 회차 값이 다르면 거부한다.
 - 되돌릴 수 없는 노드에는 `policy.requires_approval: true`를 단다. **산출 코드가 그 지점에서 실제로 멈춘다.**
 - 훅으로 강제할 게이트는 `host.enforced_by_hook`에 `{ "gate": "<id>", "check": "<명령>" }`으로
   선언한다. check는 게이트 미달 시 exit≠0이어야 한다 — **기계 없는 선언은 hook_loss로 잡힌다.**
@@ -84,6 +84,7 @@ node tools/run.mjs graph.json start <node>
 node tools/run.mjs graph.json measure <field> --run          # state[].measure.cmd 실행 (source: declared)
 node tools/run.mjs graph.json measure <field> --run "<명령>"  # 선언 없는 필드만 (source: adhoc)
 node tools/run.mjs graph.json measure <field> <value> [메모]  # 손입력 (source: reported) — 명령을 선언한 필드는 거부
+node tools/run.mjs graph.json premise <gate> "<전제>" --test "<명령>"  # 거듭 실패 뒤 (아래 참조)
 node tools/run.mjs graph.json done <node>   # 게이트 판정은 도구만 내린다
 node tools/run.mjs graph.json verify    # 원장 해시 체인 검증 (변조·절단 탐지)
 ```
@@ -96,6 +97,12 @@ node tools/run.mjs graph.json verify    # 원장 해시 체인 검증 (변조·�
 `init` 뒤에 바꿔 끼우면 STALE이고 `--run`이 거부한다. 실패한 측정(숫자 없음·시간 초과)은 `measure_failed`로
 원장에 남는다 — 초록이 나올 때까지 몰래 다시 돌리는 게 보인다.
 **출처를 보고에 쓴다.** `reported` 값으로 통과한 게이트는 측정이 아니라 에이전트의 말이다.
+
+**전제를 공격한다.** 같은 게이트가 `on_fail.premise_after`번(기본 2) 실패하면 `start`가 거부된다. 지금까지의 수정이
+모두 기댄 전제 한 문장을 적고, 그것을 직접 시험하는 명령을 준다(exit 0 = 섰다):
+`premise G1 "캐시는 실행마다 비워진다" --test "<명령>"`. 섰든 무너졌든 시험이 증거이고 실행이 풀린다. 게이트 자신의
+측정을 다시 돌리는 것은 거부한다. 무너졌으면 그 전제에 기댄 수정은 전부 버린다. 분기 게이트(`max_retry: 0`)는 면제,
+`premise_after: 0`은 끈다.
 
 ## 완료 판정 — 포기는 성공이 아니다
 

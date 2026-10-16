@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import {
   loadGraph, loadState, saveState, cmdStart, cmdMeasure, cmdDone,
   lintOrTrap, staleness, stateFileFor, freshState, evaluateGate, main, verifyLedger,
-  cmdMeasureRun, extractValue,
+  cmdMeasureRun, extractValue, cmdPremise, premiseDue,
 } from './run.mjs'
 
 // 이 스위트의 단정은 한국어 메시지에 걸려 있다 — ko 로 고정한다 (기본 언어는 영어).
@@ -641,6 +641,118 @@ await okA('CLI: measure <field> --run 이 선언 명령을 돌린다', async () 
 ok('extractValue: ANSI 색 코드를 걷고 마지막 줄을 쓴다', () => {
   eq(extractValue('\x1b[32mok\x1b[0m\n\x1b[1m12\x1b[0m\n\n'), '12', '값')
   eq(extractValue(''), null, '빈 출력')
+})
+
+ok('repeat: 같은 값이 N번 나오면 기록하고, 회차 값이 원장에 남는다', () => {
+  const { ctx, s } = bootM('r1', say('console.log(5)'), { repeat: 3 })
+  cmdMeasureRun(ctx, s, 'count')
+  eq(s.measured.count.value, 5, '값')
+  eq(JSON.stringify(lastRow(ctx).runs), '[5,5,5]', '회차 값')
+})
+
+ok('★ repeat: 회차마다 값이 다르면 흔들리는 오라클 — 측정 실패', () => {
+  // 부를 때마다 1씩 오르는 카운터 — 타이밍·캐시에 따라 값이 바뀌는 명령의 축소판
+  const counter = say("const f='r2.count';const fs=require('fs');let n=0;try{n=Number(fs.readFileSync(f,'utf8'))}catch(e){};fs.writeFileSync(f,String(n+1));console.log(n)")
+  const { ctx, s } = bootM('r2', counter, { repeat: 3 })
+  let threw = null
+  try { cmdMeasureRun(ctx, s, 'count') } catch (e) { threw = e }
+  if (!threw || !threw.message.includes('흔들리는')) throw new Error(`흔들리는 값을 받아들였다: ${threw?.message ?? s.measured.count?.value}`)
+  if (s.measured.count) throw new Error('흔들린 값이 기록됐다')
+  eq(lastRow(ctx).action, 'measure_failed', '원장 행')
+})
+
+console.log('\n== INV-7  같은 게이트가 거듭 실패하면 전제부터 시험한다 ==')
+
+// G1 이 max_retry 5 로 재시도 여유가 있는 그래프 — 전제 요구가 halt 보다 먼저 와야 의미가 있다.
+const premiseGraph = (name, onFail = {}, state) => fixture({ name, patch: {
+  gates: [{ id: 'G1', field: 'count', op: '>=', threshold: 3, on_fail: { goto: 'a', max_retry: 5, ...onFail }, ground_truth: 'measured' }],
+  nodes: [
+    { id: 'a', kind: 'work', runner: 'script', retry: { max: 9 }, policy: {} },   // 노드 재시도 한도가 먼저 걸리지 않게
+    { id: 'b', kind: 'work', runner: 'script', retry: { max: 0 }, policy: {} },
+    { id: 'c', kind: 'work', runner: 'script', retry: { max: 0 }, policy: {} },
+    { id: 'j', kind: 'join', runner: 'script', retry: { max: 0 }, policy: {} },
+    { id: 'h', kind: 'human', runner: 'manual', retry: { max: 0 }, policy: {} },
+  ],
+  ...(state ? { state } : {}),
+} })
+const bootP = (name, onFail, state) => { const ctx = premiseGraph(name, onFail, state); return { ctx, s: loadState(ctx, { create: true }) } }
+const failG1 = (ctx, s, times, measure = () => cmdMeasure(ctx, s, 'count', 1)) => {
+  for (let i = 0; i < times; i++) { cmdStart(ctx, s, 'a'); measure(); cmdDone(ctx, s, 'a') }
+}
+
+rejects('★ 같은 게이트가 2번 실패하면 세 번째 start 를 거부한다', () => {
+  const { ctx, s } = bootP('p1')
+  failG1(ctx, s, 2)
+  cmdStart(ctx, s, 'a')
+}, '전제부터 공격')
+
+ok('★ 전제를 적고 시험하면(exit 0 = 섰다) 풀리고, 원장에 전제·명령·판정이 남는다', () => {
+  const { ctx, s } = bootP('p2')
+  failG1(ctx, s, 2)
+  const r = cmdPremise(ctx, s, 'G1', '입력 count 는 이미 정수로 들어온다', say('process.exit(0)'))
+  eq(r.verdict, 'holds', '판정')
+  const row = lastRow(ctx)
+  eq(row.action, 'premise', '원장 행'); eq(row.verdict, 'holds', '원장 판정'); eq(row.fails, 2, '시험 시점 실패 수')
+  if (!row.premise.includes('정수') || !row.cmd.includes('process.exit(0)')) throw new Error('전제·명령이 원장에 없다')
+  cmdStart(ctx, s, 'a')   // 풀렸다
+})
+
+ok('전제가 무너져도(exit≠0) 시험은 끝난 것이라 풀린다 — verdict: refuted', () => {
+  const { ctx, s } = bootP('p3')
+  failG1(ctx, s, 2)
+  eq(cmdPremise(ctx, s, 'G1', '캐시는 매번 비워진다', say('process.exit(3)')).verdict, 'refuted', '판정')
+  cmdStart(ctx, s, 'a')
+})
+
+rejects('★ 전제 문장 없이는 거부', () => {
+  const { ctx, s } = bootP('p4'); failG1(ctx, s, 2)
+  cmdPremise(ctx, s, 'G1', '   ', say('process.exit(0)'))
+}, '전제를 적어라')
+
+rejects('★ 시험 명령 없는 전제는 거부 (또 하나의 추측)', () => {
+  const { ctx, s } = bootP('p5'); failG1(ctx, s, 2)
+  cmdPremise(ctx, s, 'G1', '입력은 정렬돼 있다', '')
+}, '시험 없는 전제')
+
+rejects('★ 게이트 자신의 측정 명령을 시험으로 내밀면 거부 (같은 질문을 또 묻는 것)', () => {
+  const m = say('console.log(1)')
+  const { ctx, s } = bootP('p6', {}, [{ field: 'count', type: 'int', unit: 'count', measure: { cmd: m } }])
+  failG1(ctx, s, 2, () => cmdMeasureRun(ctx, s, 'count'))
+  cmdPremise(ctx, s, 'G1', '측정이 맞다', m)
+}, '게이트 자신의 측정')
+
+ok('전제 시험 뒤로는 실패 수를 다시 센다 — 1번 더 실패는 통과, 2번이면 다시 요구', () => {
+  const { ctx, s } = bootP('p7')
+  failG1(ctx, s, 2)
+  cmdPremise(ctx, s, 'G1', '전제 하나', say('process.exit(0)'))
+  failG1(ctx, s, 1)
+  eq(premiseDue(ctx, s).length, 0, '1번 더 실패 뒤 요구 수')
+  failG1(ctx, s, 1)
+  eq(premiseDue(ctx, s)[0]?.gate, 'G1', '2번 더 실패 뒤 요구')
+})
+
+ok('premise_after: 0 이면 끈다', () => {
+  const { ctx, s } = bootP('p8', { premise_after: 0 })
+  failG1(ctx, s, 3)
+  eq(premiseDue(ctx, s).length, 0, '요구 수')
+})
+
+ok('분기 게이트(max_retry 0)는 미달이 정상 경로라 전제를 묻지 않는다', () => {
+  const ctx = premiseGraph('p9', { max_retry: 0 })
+  eq(premiseDue(ctx, { gate_fails: { G1: 9 } }).length, 0, '요구 수')
+})
+
+await okA('CLI: next 가 ⛔ 를 보이고, premise <gate> "<전제>" --test "<명령>" 이 exit 0', async () => {
+  const ctx = premiseGraph('p10')
+  const s = loadState(ctx, { create: true }); failG1(ctx, s, 2)
+  const real = console.log; let shown = ''
+  console.log = (x) => { shown += x }
+  try { await main([ctx.graphPath, 'next']) } finally { console.log = real }
+  if (!shown.includes('⛔')) throw new Error('next 가 밀린 전제 시험을 안 보인다')
+  eq(await runQuiet([ctx.graphPath, 'premise', 'G1', '임계값', '3', '이', '맞다', '--test', say('process.exit(0)')]), 0, 'premise')
+  const row = lastRow(ctx)
+  eq(row.premise, '임계값 3 이 맞다', '여러 인자로 나뉜 전제 문장')
+  eq(await runQuiet([ctx.graphPath, 'start', 'a']), 0, '풀린 뒤 start')
 })
 
 // ── 결과 ───────────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@
 **AIエージェントの「完了」は意見にすぎない。Avalonはそれを測定に変える。**<br/>
 作業を始める前に合格条件を数字で固定し、判定はAIではなくツールが下します。
 
-[![npm](https://img.shields.io/npm/v/avalon-skill?color=cb3837&logo=npm)](https://www.npmjs.com/package/avalon-skill) [![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-175%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![npm](https://img.shields.io/npm/v/avalon-skill?color=cb3837&logo=npm)](https://www.npmjs.com/package/avalon-skill) [![CI](https://github.com/Evanciel/avalon/actions/workflows/test.yml/badge.svg)](https://github.com/Evanciel/avalon/actions/workflows/test.yml) ![tests](https://img.shields.io/badge/tests-188%20passing-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [English](README.md) · [한국어](README.ko.md) · **日本語** · [简体中文](README.zh.md)
 
@@ -257,13 +257,14 @@ node tools/run.mjs graph.json status          # whole picture, including gates t
 node tools/run.mjs graph.json start <node>    # refused if the node isn't in the frontier
 node tools/run.mjs graph.json measure <field> <value> [note]
 node tools/run.mjs graph.json measure <field> --run   # state[].measure.cmd をランナー自身が実行 — 数値を打つのはあなたではない
+node tools/run.mjs graph.json premise <gate> "<前提>" --test "<コマンド>"   # 失敗が続いたら: 前提を試す
 node tools/run.mjs graph.json done <node>     # the tool decides pass/fail, not you
 node tools/run.mjs graph.json verify          # ledger hash-chain check (tamper / truncation)
 node tools/run.mjs graph.json abort           # cancel the active node
 node tools/run.mjs graph.json lint            # OR-trap check (2+ gates on one node)
 ```
 
-すべてのコマンドに機械可読出力 `--json` があります。ランナーは実質「やらせないことのリスト」で、不変条件(INV-1〜6、[run.mjs](tools/run.mjs))から来ています:
+すべてのコマンドに機械可読出力 `--json` があります。ランナーは実質「やらせないことのリスト」で、不変条件(INV-1〜7、[run.mjs](tools/run.mjs))から来ています:
 
 | こうすると | ランナーの答え |
 |---|---|
@@ -273,10 +274,11 @@ node tools/run.mjs graph.json lint            # OR-trap check (2+ gates on one n
 | `init` 後にグラフを直して続行 | **STALE** 表示 — 状態は自分がどのグラフハッシュから生まれたか覚えている |
 | ゲートを `max_retry` 回より多く失敗 | **停止** — 実行が止まり、決定が人間に渡る |
 | `state[].measure` でコマンドを宣言したフィールドに数値を手入力 | 拒否 — `measure <field> --run` でランナーが宣言済みコマンドを自分で実行する。別のコマンドへの差し替えや `init` 後の書き換え(STALE)も拒否 |
+| 同じゲートが2回失敗した後にまた `start` | 拒否 — これまでの修正が頼った前提を書き、その前提を直接試すコマンドをランナーが実行する(`premise`)まで解除されない。成立でも崩壊でも試験が証拠になる。ゲート自身の測定の再実行は拒否。`on_fail.premise_after` で調整(0 = オフ)、分岐ゲート(`max_retry: 0`)は対象外 |
 
 受理された測定はすべて台帳に追記されます。台帳の中身は決して書き換えられません — `init --force` でさえ状態を捨てるだけで台帳は残します。そして台帳は自分自身を守ります: [証拠は自分自身を守る](#証拠は自分自身を守る)参照。
 
-測定ごとに**数値の出どころ**も残ります — `declared`(作業前にグラフへ固定したコマンドをランナーが実行)、`adhoc`(その場で渡したコマンドをランナーが実行 — コマンド・終了コード・出力ハッシュが残る)、`reported`(手入力)。ゲート結果にもこの出どころが載り、`ground_truth: measured` と宣言したゲートに手入力の値が入ると ⚠ が付きます。宣言は `{ "field": "tests_failed", "type": "int", "measure": { "cmd": "npm test", "pattern": "failed: (\d+)" } }` の形です — `pattern` がなければ stdout の空でない最後の行が数値でなければなりません。終了コード≠0 は問題なく(テストランナーは失敗を報告して 1 で終わる)、数値が取れなければ測定失敗で、その失敗も台帳に残ります。
+測定ごとに**数値の出どころ**も残ります — `declared`(作業前にグラフへ固定したコマンドをランナーが実行)、`adhoc`(その場で渡したコマンドをランナーが実行 — コマンド・終了コード・出力ハッシュが残る)、`reported`(手入力)。ゲート結果にもこの出どころが載り、`ground_truth: measured` と宣言したゲートに手入力の値が入ると ⚠ が付きます。宣言は `{ "field": "tests_failed", "type": "int", "measure": { "cmd": "npm test", "pattern": "failed: (\d+)" } }` の形です — `pattern` がなければ stdout の空でない最後の行が数値でなければなりません。終了コード≠0 は問題なく(テストランナーは失敗を報告して 1 で終わる)、数値が取れなければ測定失敗で、その失敗も台帳に残ります。 `measure.repeat: N` はコマンドを N 回実行し、値がすべて一致したときだけ受け入れます — 同じコマンドが実行ごとに違う数値を出すなら、それは測定ではなく揺れるオラクルです。
 
 ツールのメッセージは既定で英語です。韓国語のシステムロケール(または `AVALON_LANG=ko`)で韓国語に切り替わります(日本語は未対応)。ビルド成果物は常に英語です — バイトがハッシュされるため、環境に依存してはならないからです。
 
@@ -501,10 +503,10 @@ lossが0でないなら、「宣言はあるが誰も強制しない」状態で
 
 ## テスト方法
 
-`npm test` 1つで回る3つのスイート、合計175件:
+`npm test` 1つで回る3つのスイート、合計188件:
 
-- **[test.mjs](tools/test.mjs) (95件)** — スキーマとコンパイラの挙動、そして**実行意味論**: コンパイルされたワークフロー出力をスタブホストで実際に実行します。「abandonedが空でなければcompletedはfalse」のような主張が、断言ではなく実演されます。新顔は**指紋の弁別力**です — 同じリポジトリを2回実測すればバイトまで同じ指紋、別のリポジトリなら別の指紋にならなければなりません。実際のscaffold実行で測ります。指紋の弁別力は、このテストまで*未検証*の主張でした。デプロイ同期ゲートはランタイムファイル9個をインストール済みスキルのコピーとバイト照合し、リポジトリと配備物が静かにずれるのを防ぎます。
-- **[run.selftest.mjs](tools/run.selftest.mjs) (56件)** — ランナーの拒否の壁を、壁の存在を証明する唯一の方法でテストします: *ガードを消せばスイートが赤くならなければならない。* 各テストは禁止された状況(フロンティア外のstart、測定なしのdone、グラフを直して続行)を構成し、ランナーが拒否したときだけ通ります。台帳チェーンのテストは本物の台帳を攻撃します — 過去の測定値を書き換え、末尾を切り詰め、チェーンを迂回して追記します — そして全コマンドが拒否して初めて通ります。
+- **[test.mjs](tools/test.mjs) (96件)** — スキーマとコンパイラの挙動、そして**実行意味論**: コンパイルされたワークフロー出力をスタブホストで実際に実行します。「abandonedが空でなければcompletedはfalse」のような主張が、断言ではなく実演されます。新顔は**指紋の弁別力**です — 同じリポジトリを2回実測すればバイトまで同じ指紋、別のリポジトリなら別の指紋にならなければなりません。実際のscaffold実行で測ります。指紋の弁別力は、このテストまで*未検証*の主張でした。デプロイ同期ゲートはランタイムファイル9個をインストール済みスキルのコピーとバイト照合し、リポジトリと配備物が静かにずれるのを防ぎます。
+- **[run.selftest.mjs](tools/run.selftest.mjs) (68件)** — ランナーの拒否の壁を、壁の存在を証明する唯一の方法でテストします: *ガードを消せばスイートが赤くならなければならない。* 各テストは禁止された状況(フロンティア外のstart、測定なしのdone、グラフを直して続行)を構成し、ランナーが拒否したときだけ通ります。台帳チェーンのテストは本物の台帳を攻撃します — 過去の測定値を書き換え、末尾を切り詰め、チェーンを迂回して追記します — そして全コマンドが拒否して初めて通ります。
 - **[install.selftest.mjs](tools/install.selftest.mjs) (24件)** — インストーラの境界を同じ方法で: `--yes` なしの書き込み禁止、グローバル拒否、古い仕様の拒否、他人のフック保存、冪等な再インストール、そしてゲートの未達・STALEブロック(exit 2)。3件はTOCTOU攻撃シナリオです: 承認の*後で* `build/hooks.json` を書き換え — checkを悪意あるコマンドに差し替え、グラフごと整合的に再生成までして — ゲートが**何も実行せずに**ブロックしたときだけ通ります(仕込んだコマンドが走らなかったことをマーカーファイルで証明)。残りはプローブの壁(失敗できないオラクルは飾りとして拒否)、`--status` が書かずに読むだけであること、そして既定言語が本当に英語であることを固定します。
 
 CIはubuntuとwindowsで3つのスイートすべてを回します。改行は [.gitattributes](.gitattributes) でLFに固定しています — G0bはバイト単位のオラクルなので、CRLFのチェックアウトは厳密には別の文書になってしまうからです。
@@ -525,8 +527,8 @@ tools/
   install-hooks.mjs      承認ゲート付きフックインストーラ (プロジェクトsettings限定)
   hooks-gate.mjs         Stopフック実行者 — 赤いゲートはターン終了をブロック
   fixtures/              コミット済みの壊れた入力 — プローブが狙う先
-  test.mjs               スキーマ・コンパイラ・実行意味論・指紋テスト (95件)
-  run.selftest.mjs       ランナー自己試験 — 「ガードを消したら赤くなるか」(56件)
+  test.mjs               スキーマ・コンパイラ・実行意味論・指紋テスト (96件)
+  run.selftest.mjs       ランナー自己試験 — 「ガードを消したら赤くなるか」(68件)
   install.selftest.mjs   インストーラ・ゲート自己試験 — 承認・プローブ・改竄の壁 (24件)
 docs/graph/              設計史、IR仕様、上の傷跡の原本
 images/                  このREADMEの図

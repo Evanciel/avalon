@@ -831,7 +831,19 @@ t('measure: 못 도는 선언은 스키마 위반이다 (빈 cmd·컴파일 불�
     ['캡처 그룹 없음', { cmd: 'x', pattern: 'failed: \\d+' }],
     ['timeout 0', { cmd: 'x', timeout_ms: 0 }],
     ['빈 cwd', { cmd: 'x', cwd: '' }],
+    ['repeat 0', { cmd: 'x', repeat: 0 }],
+    ['repeat 소수', { cmd: 'x', repeat: 1.5 }],
   ]) ok(measureViol(m).length > 0, `${why} 를 통과시켰다`)
+})
+
+t('premise_after: 음수·소수는 스키마 위반, 0(끔)과 양의 정수는 정상', () => {
+  const viol = (v) => {
+    const g = clone()
+    g.gates[0].on_fail = { ...g.gates[0].on_fail, premise_after: v }
+    return validate(g).schemaViolations.filter((x) => x.includes('premise_after')).length
+  }
+  ok(viol(-1) > 0, '음수를 통과시켰다'); ok(viol(1.5) > 0, '소수를 통과시켰다'); ok(viol('2') > 0, '문자열을 통과시켰다')
+  eq(viol(0), 0, '0(끔)의 위반 수'); eq(viol(3), 0, '3 의 위반 수')
 })
 
 t('measure: 정상 선언은 위반이 아니다', () => {

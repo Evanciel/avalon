@@ -170,11 +170,14 @@
 | `pattern` | | 값 = stdout 에서 이 정규식의 **마지막** 일치의 1번 그룹. 없으면 비어 있지 않은 마지막 줄 전체 |
 | `timeout_ms` | | 기본 600000. 넘으면 측정 실패 |
 | `cwd` | | graph.json 기준 상대경로 |
+| `repeat` | | 기본 1. N번 돌려 값이 전부 같아야 받아들인다 — 다르면 흔들리는 오라클로 측정 실패 |
 
 - 선언한 필드는 `measure <field> --run` 으로만 잰다. 손입력·다른 명령 바꿔 끼우기는 거부.
 - `cmd` 는 그래프 해시에 들어간다 → `init` 뒤에 바꾸면 STALE → `--run` 거부.
 - 종료코드≠0 은 실패가 아니다. 값을 못 뽑으면 실패이고, 실패도 원장(`measure_failed`)에 남는다.
-- 검증기는 빈 `cmd`, 컴파일 안 되는 `pattern`, 캡처 그룹 없는 `pattern`, 양의 정수가 아닌 `timeout_ms` 를 스키마 위반으로 세운다.
+- 검증기는 빈 `cmd`, 컴파일 안 되는 `pattern`, 캡처 그룹 없는 `pattern`, 양의 정수가 아닌 `timeout_ms`·`repeat` 를 스키마 위반으로 세운다.
+
+`gates[].on_fail.premise_after` (선택, 기본 2, 0 = 끔) — run.mjs INV-7. 같은 게이트가 이만큼 실패하면 `run.mjs premise <gate> "<전제>" --test "<명령>"` 전까지 `start` 를 거부한다. `max_retry: 0`(분기) 게이트는 면제. 0 이상의 정수가 아니면 스키마 위반.
 
 ### `nodes`
 
