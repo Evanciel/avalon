@@ -7,3 +7,6 @@ build/
 node_modules/
 *.log
 .bkit/
+
+# 세션 컨텍스트 (/save) — 로컬 전용, 공개 저장소에 올리지 않는다
+.claude/context-save.md
