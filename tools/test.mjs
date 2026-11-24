@@ -856,8 +856,9 @@ console.log('\n── scaffold.mjs — 지문 변별력 ──')
 // 지문의 변별력은 지금까지 <미검증> 한계였다: 같은 저장소 → 같은 지문(결정론),
 // 다른 저장소 → 다른 지문(변별). 둘 다 실측으로 고정한다.
 const SCAF = fileURLToPath(new URL('./scaffold.mjs', import.meta.url))
+// 이 PC: C: 는 빠듯하고 A: 는 가득 찼다 — 임시물은 F:/claude-temp/<프로젝트> 로. F: 가 없는 곳(CI)은 OS 임시 폴더.
 const FP_BASE = process.env.CLAUDE_SELFTEST_TMP
-  || (existsSync('A:/claude-temp') ? 'A:/claude-temp' : tmpdir())
+  || (existsSync('F:/claude-temp') ? (mkdirSync('F:/claude-temp/avalon', { recursive: true }), 'F:/claude-temp/avalon') : tmpdir())
 const FP_DIR = mkdtempSync(join(FP_BASE, 'fpdisc-'))
 const mkRepo = (name, files) => {
   const d = join(FP_DIR, name)

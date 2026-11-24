@@ -23,8 +23,9 @@ import { compileHooks } from './compile.mjs'
 process.env.AVALON_LANG = 'ko'
 
 const TOOLS = dirname(fileURLToPath(import.meta.url))
+// 이 PC: C: 는 빠듯하고 A: 는 가득 찼다 — 임시물은 F:/claude-temp/<프로젝트> 로. F: 가 없는 곳(CI)은 OS 임시 폴더.
 const TMP_BASE = process.env.CLAUDE_SELFTEST_TMP
-  || (existsSync('A:/claude-temp') ? 'A:/claude-temp' : tmpdir())
+  || (existsSync('F:/claude-temp') ? (mkdirSync('F:/claude-temp/avalon', { recursive: true }), 'F:/claude-temp/avalon') : tmpdir())
 const DIR = mkdtempSync(join(TMP_BASE, 'hookinst-'))
 
 let pass = 0, fail = 0
